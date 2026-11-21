@@ -1,0 +1,27 @@
+GYRO SNAKE
+Copyright (c) 2026 GYRO SNAKE contributors
+SPDX-License-Identifier: Apache-2.0
+
+Upstream board support
+----------------------
+The files under firmware/components/bsp/ are derived from the CodeCraft AI
+Hardware reTerminal Sticky BSP:
+
+  Copyright (c) 2026 CodeCraft AI Hardware contributors
+  SPDX-License-Identifier: Apache-2.0
+
+The original copyright headers are preserved in those files.
+
+IMU algorithm reference
+-----------------------
+The calibration, Mahony and tilt modules are an independent C99
+re-implementation of the algorithms reached from app_main() in
+MagicRobot_V0.1/embedded. They were written from the actual executed code
+(not the comments); the accel-bias/Mahony inconsistency of that reference is
+documented in docs/imu-calibration.md and deliberately not reproduced.
+
+Original work
+-------------
+The snake game core, renderer, font, desktop simulator, firmware port and
+documentation are original work. Snake is a generic game genre; this project
+contains no third-party characters, sprites or music.
