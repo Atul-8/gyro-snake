@@ -1,0 +1,23 @@
+# ESP-IDF build artifacts
+firmware/build/
+firmware/build-vm/
+firmware/sdkconfig
+firmware/managed_components/
+firmware/dependencies.lock.tmp
+
+# Host / desktop build artifacts
+host/build/
+host/out/
+desktop/build/
+desktop/out/
+
+# Local state
+desktop/settings.json
+desktop/highscore.json
+.cache/
+vendor/
+.mimosa/
+__pycache__/
+*.pyc
+*.o
+.DS_Store
