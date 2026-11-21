@@ -1,0 +1,6 @@
+# Keep source and shell scripts LF even on Windows; batch files CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.gif binary
+*.pdf binary
