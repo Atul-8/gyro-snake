@@ -33,13 +33,20 @@ extern "C" {
 #define IMU_PORT_SAMPLE_HZ 100
 
 /*
- * Board mounting. The LSM6DS3TR-C axes on the Sticky are NOT verified on
- * hardware yet; these three compile-time switches are the one-line fix after
- * the four-direction physical check. Defaults are the screen-natural mapping
- * used by the desktop simulator.
+ * Board mounting, applied in imu_port to the neutral-relative angles (single
+ * mapping point: the direction filter, the on-screen ball and the telemetry
+ * all see screen-natural values; the tilt filter runs identity mapping).
+ *
+ * Hardware calibration 2026-11-23 (user report + rig physics):
+ *   - physical UP tilt drives sensor roll positive  -> screen pitch = +roll
+ *   - physical RIGHT tilt drives sensor pitch negative
+ *     (right edge down -> ax > 0 -> pitch < 0)      -> screen roll  = -pitch
+ * i.e. swap_xy + invert_roll. If a check on hardware disagrees, fix live via
+ * the serial console / desktop imu_debug.py (buttons), then write it back
+ * here.
  */
-#define IMU_PORT_AXIS_SWAP_XY 0
-#define IMU_PORT_AXIS_INVERT_ROLL 0
+#define IMU_PORT_AXIS_SWAP_XY 1
+#define IMU_PORT_AXIS_INVERT_ROLL 1
 #define IMU_PORT_AXIS_INVERT_PITCH 0
 
 /* Result of one calibration window, published by the IMU task and consumed by
