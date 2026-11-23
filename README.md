@@ -103,6 +103,6 @@ docs/                      需求、架构、IMU 校准、硬件、测试记录
 ## 参考与许可
 
 - BSP 来自 CodeCraft AI Hardware，Apache-2.0；版权头保留，见 `NOTICE`。
-- IMU 校准/Mahony 算法以 `MagicRobot_V0.1/embedded` 的实际代码路径为参考
+- IMU 校准/Mahony 算法以本地参考工程 `MagicRobot_V0.1/embedded` 的实际代码路径为参考
   （不是照抄注释）；关键差异见 `docs/imu-calibration.md`。
 - 游戏、渲染、音效、文档为本项目原创；贪吃蛇是通用玩法，不含第三方游戏素材。

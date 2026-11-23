@@ -9,8 +9,8 @@
  * Algorithm provenance
  * --------------------
  * The calibration and Mahony code is a clean re-implementation of the
- * *actual* code paths reached from app_main() in
- *   MagicRobot_V0.1/embedded
+ * *actual* code paths reached from app_main() in the local reference
+ * project MagicRobot_V0.1/embedded
  * (src/core/calibration/imu_calib.c, src/core/attitude/mahony.c,
  *  apps/espidf/main/runtime/app_stream.c), not of its comments.
  *
