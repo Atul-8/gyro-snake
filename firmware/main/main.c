@@ -18,6 +18,7 @@
  * Serial output and the panel carry no text other than GYRO SNAKE.
  */
 #include "board_port.h"
+#include "console.h"
 #include "imu_port.h"
 #include "snake.h"
 #include "touch_port.h"
@@ -404,6 +405,12 @@ void app_main(void)
     err = imu_port_start();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "IMU task not started: %s", esp_err_to_name(err));
+    }
+
+    /* 7b. Serial console: $-commands retune the IMU without reflashing. */
+    err = console_port_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "console not available: %s", esp_err_to_name(err));
     }
 
     /* 8. Game task: buffers, persisted high score, saved-calibration flag. */

@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c"
+    SRCS "main.c" "console.c"
     INCLUDE_DIRS "."
     REQUIRES
         board_port
@@ -10,6 +10,7 @@ idf_component_register(
         imu_core
         nvs_flash
         esp_driver_gpio
+        esp_driver_uart
         heap
         freertos
         log

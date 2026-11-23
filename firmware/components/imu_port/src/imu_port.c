@@ -13,6 +13,7 @@
  */
 #include "imu_port.h"
 
+#include <math.h>
 #include <stdatomic.h>
 #include <string.h>
 
@@ -85,6 +86,26 @@ static bool s_calibrating;
 static imu_bias_t s_bias; /* valid == true once a calibration is applied */
 static float s_neutral_roll;
 static float s_neutral_pitch;
+
+/* Runtime configuration, owned by the IMU task but set from the console. */
+static bool s_axis_swap;
+static bool s_axis_inv_roll;
+static bool s_axis_inv_pitch;
+static atomic_bool s_axis_request;
+static bool s_req_swap;
+static bool s_req_inv_roll;
+static bool s_req_inv_pitch;
+
+static float s_deadzone = 8.0f;
+static float s_rearm = 4.0f;
+static int s_stable = 2;
+static atomic_bool s_tilt_cfg_request;
+static float s_req_deadzone;
+static float s_req_rearm;
+static int s_req_stable;
+
+static atomic_uint s_telemetry_div = 10u; /* 100 Hz / div */
+static uint32_t s_telemetry_ticks;
 
 static int s_last_who = -1;
 
@@ -280,6 +301,25 @@ static void imu_task(void *arg)
             }
         }
 
+        if (atomic_exchange_explicit(&s_axis_request, false, memory_order_acquire)) {
+            s_axis_swap = s_req_swap;
+            s_axis_inv_roll = s_req_inv_roll;
+            s_axis_inv_pitch = s_req_inv_pitch;
+            tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
+            ESP_LOGI(TAG, "axis map now swap=%d invert_roll=%d invert_pitch=%d",
+                     (int)s_axis_swap, (int)s_axis_inv_roll, (int)s_axis_inv_pitch);
+        }
+
+        if (atomic_exchange_explicit(&s_tilt_cfg_request, false, memory_order_acquire)) {
+            if (s_req_deadzone > 0.0f) s_deadzone = s_req_deadzone;
+            if (s_req_rearm > 0.0f) s_rearm = s_req_rearm;
+            if (s_req_stable > 0) s_stable = s_req_stable;
+            tilt_init(&s_tilt, s_deadzone, s_rearm, s_stable);
+            tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
+            ESP_LOGI(TAG, "tilt params now deadzone=%d rearm=%d stable=%d ddeg",
+                     (int)(s_deadzone * 10.0f), (int)(s_rearm * 10.0f), s_stable);
+        }
+
         if (!atomic_load(&s_sensor_ready)) {
             if (--probe_countdown <= 0) {
                 probe_countdown = GS_IMU_PROBE_EVERY_TICKS;
@@ -353,20 +393,42 @@ static void imu_task(void *arg)
                 atomic_store(&s_direction_latch, dir);
             }
 
-            /* 10 Hz telemetry for the desktop IMU monitor:
-             * r/p relative deci-deg, ar/ap absolute deci-deg, d direction,
-             * gx/gy/gz mdps, ax/ay/az mg. */
-            static uint32_t telemetry_div;
-            if (++telemetry_div >= 10u) {
-                telemetry_div = 0;
+            /* Telemetry for the debug page. Fields, in order:
+ *   r/p    relative roll/pitch, deci-deg
+ *   ar/ap  absolute Mahony roll/pitch, deci-deg
+ *   d      reported direction (locked filter output), -1 = none
+ *   gx..az corrected gyro mdps and raw accel mg
+ *   m      axis map bits: swap<<2 | invert_roll<<1 | invert_pitch
+ *   dz/ra  deadzone / re-arm, deci-deg
+ *   lk     filter lock state (-1 unlocked, else the held direction)
+ *   an     |accel| in mg (1 g at rest; shaking changes it)
+ *   pr/pp  accel-only roll/pitch relative to neutral, deci-deg. Compare with
+ *          r/p to see whether Mahony tracks gravity.
+ */
+            if (++s_telemetry_ticks >= atomic_load(&s_telemetry_div)) {
+                s_telemetry_ticks = 0;
+                const float an = sqrtf(raw.ax * raw.ax + raw.ay * raw.ay +
+                                       raw.az * raw.az);
+                const float aroll = atan2f(raw.ay, raw.az) * GS_IMU_RAD_TO_DEG;
+                const float apitch =
+                    atan2f(-raw.ax, sqrtf(raw.ay * raw.ay + raw.az * raw.az)) *
+                    GS_IMU_RAD_TO_DEG;
+                const int map_bits = (s_axis_swap ? 4 : 0) |
+                                     (s_axis_inv_roll ? 2 : 0) |
+                                     (s_axis_inv_pitch ? 1 : 0);
                 ESP_LOGI(TAG,
-                         "IMU r=%d p=%d ar=%d ap=%d d=%d gx=%d gy=%d gz=%d ax=%d ay=%d az=%d",
+                         "IMU r=%d p=%d ar=%d ap=%d d=%d gx=%d gy=%d gz=%d "
+                         "ax=%d ay=%d az=%d m=%d dz=%d ra=%d lk=%d an=%d pr=%d pp=%d",
                          (int)(roll_deg * 10.0f), (int)(pitch_deg * 10.0f),
                          (int)(roll * GS_IMU_RAD_TO_DEG * 10.0f),
                          (int)(pitch * GS_IMU_RAD_TO_DEG * 10.0f), (int)dir,
                          (int)(corrected.gx * 1000.0f), (int)(corrected.gy * 1000.0f),
                          (int)(corrected.gz * 1000.0f), (int)(corrected.ax * 1000.0f),
-                         (int)(corrected.ay * 1000.0f), (int)(corrected.az * 1000.0f));
+                         (int)(corrected.ay * 1000.0f), (int)(corrected.az * 1000.0f),
+                         map_bits, (int)(s_deadzone * 10.0f),
+                         (int)(s_rearm * 10.0f), s_tilt.locked, (int)(an * 1000.0f),
+                         (int)((aroll - s_neutral_roll) * 10.0f),
+                         (int)((apitch - s_neutral_pitch) * 10.0f));
             }
         }
 
@@ -396,10 +458,20 @@ esp_err_t imu_port_init(void)
     s_neutral_pitch = 0.0f;
     s_calibrating = false;
 
+    s_axis_swap = IMU_PORT_AXIS_SWAP_XY != 0;
+    s_axis_inv_roll = IMU_PORT_AXIS_INVERT_ROLL != 0;
+    s_axis_inv_pitch = IMU_PORT_AXIS_INVERT_PITCH != 0;
+    atomic_store(&s_axis_request, false);
+    atomic_store(&s_tilt_cfg_request, false);
+    s_deadzone = 8.0f;
+    s_rearm = 4.0f;
+    s_stable = 2;
+    atomic_store(&s_telemetry_div, 10u);
+    s_telemetry_ticks = 0;
+
     mahony_init(&s_mahony, 2.0f, 0.0f, 0.01f);
-    tilt_init(&s_tilt, 8.0f, 4.0f, 2);
-    tilt_set_axis(&s_tilt, IMU_PORT_AXIS_SWAP_XY != 0, IMU_PORT_AXIS_INVERT_ROLL != 0,
-                  IMU_PORT_AXIS_INVERT_PITCH != 0);
+    tilt_init(&s_tilt, s_deadzone, s_rearm, s_stable);
+    tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
 
     i2c_master_bus_config_t bus_cfg;
     memset(&bus_cfg, 0, sizeof(bus_cfg));
@@ -534,6 +606,47 @@ void imu_port_get_tilt(int *roll_cdeg, int *pitch_cdeg)
 {
     if (roll_cdeg) *roll_cdeg = (int)atomic_load(&s_tilt_roll_cdeg);
     if (pitch_cdeg) *pitch_cdeg = (int)atomic_load(&s_tilt_pitch_cdeg);
+}
+
+void imu_port_get_config(imu_port_config_t *out)
+{
+    if (!out) return;
+    out->swap_xy = s_axis_swap;
+    out->invert_roll = s_axis_inv_roll;
+    out->invert_pitch = s_axis_inv_pitch;
+    out->deadzone_deg = s_deadzone;
+    out->rearm_deg = s_rearm;
+    out->stable_samples = s_stable;
+    out->telemetry_hz =
+        IMU_PORT_SAMPLE_HZ / (int)atomic_load(&s_telemetry_div);
+    out->neutral_roll = s_neutral_roll;
+    out->neutral_pitch = s_neutral_pitch;
+    out->ready = atomic_load(&s_sensor_ready);
+}
+
+void imu_port_set_axis(bool swap_xy, bool invert_roll, bool invert_pitch)
+{
+    s_req_swap = swap_xy;
+    s_req_inv_roll = invert_roll;
+    s_req_inv_pitch = invert_pitch;
+    atomic_store_explicit(&s_axis_request, true, memory_order_release);
+}
+
+void imu_port_set_tilt_params(float deadzone_deg, float rearm_deg, int stable_samples)
+{
+    s_req_deadzone = deadzone_deg;
+    s_req_rearm = rearm_deg;
+    s_req_stable = stable_samples;
+    atomic_store_explicit(&s_tilt_cfg_request, true, memory_order_release);
+}
+
+void imu_port_set_telemetry_hz(int hz)
+{
+    if (hz < 1) hz = 1;
+    if (hz > 50) hz = 50;
+    unsigned div = (unsigned)(IMU_PORT_SAMPLE_HZ / hz);
+    if (div < 1u) div = 1u;
+    atomic_store(&s_telemetry_div, div);
 }
 
 bool imu_port_ready(void)
