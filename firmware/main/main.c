@@ -306,7 +306,11 @@ static void game_task(void *arg)
             started = true;
             ESP_LOGI(TAG, "start requested (tap/OK) -> calibration");
         }
-        const int8_t tilt = imu_port_take_direction();
+        /* Real-time following: sample the CURRENT tilt sector, not a latch.
+         * The IMU task re-evaluates the 45-degree sector at 100 Hz, so the
+         * snake turns as soon as the hand moves into another sector, even
+         * without passing through the center pose. NONE keeps the direction. */
+        const int8_t tilt = imu_port_direction();
         if (!started) {
             /* snake_begin_calibration() already composed a dirty card; ticking
              * now would overwrite it (the core requires !dirty before tick). */
@@ -421,7 +425,7 @@ void app_main(void)
     s_ctx.imu_calibrated = have_calib;
 
     ESP_LOGI(TAG, "keys: OK(4)=start/pause DOWN(6)=set zero UP(5)=recalibrate (pause/over)");
-    ESP_LOGI(TAG, "tilt: deadzone 8 deg, rearm 4 deg, 2 stable samples; axis map %d/%d/%d",
+    ESP_LOGI(TAG, "tilt: 45-degree sectors, real-time follow; deadzone 8 deg, boundary hysteresis 4 deg, 2 stable samples; axis map %d/%d/%d",
              IMU_PORT_AXIS_SWAP_XY, IMU_PORT_AXIS_INVERT_ROLL, IMU_PORT_AXIS_INVERT_PITCH);
 
     if (xTaskCreate(game_task, "gs_game", GS_GAME_TASK_STACK, &s_ctx, GS_GAME_TASK_PRIO, NULL) !=
