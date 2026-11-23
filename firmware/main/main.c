@@ -20,6 +20,7 @@
 #include "board_port.h"
 #include "imu_port.h"
 #include "snake.h"
+#include "touch_port.h"
 
 #include "driver/gpio.h"
 #include "esp_heap_caps.h"
@@ -66,7 +67,7 @@ static esp_err_t power_hold_init(void)
 {
     const gpio_config_t cfg = {
         .pin_bit_mask = (1ULL << GS_PIN_HOLD) | (1ULL << GS_PIN_LOCK),
-        .mode = GPIO_MODE_OUTPUT,
+        .mode = GPIO_MODE_INPUT_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
@@ -82,8 +83,9 @@ static esp_err_t power_hold_init(void)
         ESP_LOGI(TAG, "power hold high: GPIO%d(HOLD)=%d GPIO%d(LOCK)=%d", GS_PIN_HOLD, hold,
                  GS_PIN_LOCK, lock);
     } else {
-        ESP_LOGE(TAG, "power hold FAILED: GPIO%d(HOLD)=%d GPIO%d(LOCK)=%d err=%s",
-                 GS_PIN_HOLD, hold, GS_PIN_LOCK, lock, esp_err_to_name(err));
+        ESP_LOGW(TAG,
+                 "power hold set high but readback GPIO%d=%d GPIO%d=%d; USB is fine, verify on battery",
+                 GS_PIN_HOLD, hold, GS_PIN_LOCK, lock);
     }
     return err;
 }
@@ -122,24 +124,24 @@ static void game_task(void *arg)
     ESP_LOGI(TAG, "high score from NVS: %u", (unsigned)ctx->high_score);
 
     if (ctx->imu_calibrated) {
-        /* snake.h offers no public "mark calibrated" setter, so the documented
-         * begin + done(true) pair is the way into PLAY with a saved pose. */
-        snake_begin_calibration(&s_game);
-        snake_calibration_done(&s_game, true);
-        ESP_LOGI(TAG, "saved IMU calibration present - starting directly in PLAY");
+        /* The saved pose is only a starting point: every start still runs a
+         * fresh 4 s zeroing so the neutral pose matches how the user holds
+         * the device now. */
+        ESP_LOGI(TAG, "saved IMU calibration loaded; every start re-zeroes");
     }
 
     uint32_t fast_run = 0;
     bool hiscore_saved = false;
     bool calib_pending = false;
     uint8_t calib_shown = 0;
+    bool play_grace = false;
 
     for (;;) {
         const snake_status_t *status = snake_status(&s_game);
         if (!status) reboot_soon("core status unavailable");
 
         /* Entering CALIBRATING (from TITLE, PAUSE+UP or GAME_OVER+UP) is the
-         * signal to ask the IMU task for a fresh 300-sample window. */
+         * signal to ask the IMU task for a fresh 400-sample window. */
         if (status->state == SNAKE_STATE_CALIBRATING) {
             if (!calib_pending) {
                 imu_port_request_calibration();
@@ -165,6 +167,11 @@ static void game_task(void *arg)
                     ESP_LOGW(TAG, "IMU calibration failed; returning to the title card");
                 }
                 snake_calibration_done(&s_game, cal.ok);
+                if (cal.ok) {
+                    /* Let the player see the board and tilt before the snake
+                     * takes its first step. */
+                    play_grace = true;
+                }
                 drain_sounds();
                 calib_pending = false;
             } else {
@@ -184,6 +191,18 @@ static void game_task(void *arg)
             const uint8_t *data = (kind == SNAKE_FRAME_GRAY4) ? snake_gray4(&s_game)
                                                              : snake_mono(&s_game);
             if (!data) reboot_soon("core returned a NULL framebuffer");
+
+            /* The tilt ball is an instrument on top of the composed play
+             * frame. Every play frame starts from a cleared buffer, so the
+             * ball never leaves a trail; drawing it here keeps it in step with
+             * what the panel is about to show. Cards are gray4 and stay clean. */
+            if (kind == SNAKE_FRAME_MONO) {
+                int roll_cdeg = 0;
+                int pitch_cdeg = 0;
+                imu_port_get_tilt(&roll_cdeg, &pitch_cdeg);
+                board_draw_tilt_ball(ctx->buffers.mono, roll_cdeg, pitch_cdeg,
+                                     imu_port_direction());
+            }
 
             /* gray4 cards are always full; mono is full on the core's request
              * and after GS_FAST_PER_FULL consecutive fast mono frames. */
@@ -237,11 +256,61 @@ static void game_task(void *arg)
         /* Observation window: the panel is stable from the moment the refresh
          * returned. Key edges seen during the refresh or the window stay in
          * the queue and land in this tick's mask. */
-        vTaskDelay(pdMS_TO_TICKS(GS_THINK_MS));
+        if (play_grace) {
+            ESP_LOGI(TAG, "ready window: 3 s to tilt before the first step");
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            play_grace = false;
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(GS_THINK_MS));
+        }
 
-        const uint8_t buttons = input_port_poll();
-        const int8_t tilt = imu_port_direction();
-        snake_tick(&s_game, buttons, tilt);
+        uint8_t buttons = input_port_poll();
+        int tap_x = 0;
+        int tap_y = 0;
+        if (touch_port_take_press_xy(&tap_x, &tap_y)) {
+            status = snake_status(&s_game);
+            /* The tilt ball lives in the bottom-right corner. Accept a corner
+             * tap as the zero gesture: the GT911 axis transform is provisional,
+             * and a corner stays a corner under any axis order or flip. The
+             * touch driver logs the raw and mapped point of every tap, so the
+             * map can be pinned down and this test tightened later. */
+            const bool in_corner =
+                (tap_x >= 380 || tap_x <= 100) && (tap_y >= 700 || tap_y <= 100);
+            const bool playing =
+                status && (status->state == SNAKE_STATE_PLAY ||
+                           status->state == SNAKE_STATE_PAUSE);
+            if (playing && in_corner) {
+                imu_port_request_rezero();
+                ESP_LOGI(TAG, "ball tap (%d,%d): set current pose as tilt zero", tap_x,
+                         tap_y);
+            } else {
+                buttons |= SNAKE_BTN_OK;
+            }
+        }
+        status = snake_status(&s_game);
+        bool started = false;
+        if (status && (buttons & SNAKE_BTN_DOWN)) {
+            /* Volume-down key: the current pose becomes the tilt zero at once,
+             * in every state. Hold the device the way you play, press DOWN,
+             * then tilt: up/down/left/right are measured from that pose. */
+            imu_port_request_rezero();
+            buttons &= (uint8_t)~SNAKE_BTN_DOWN;
+            ESP_LOGI(TAG, "DOWN: set current pose as tilt zero");
+        }
+        if (status && status->state == SNAKE_STATE_TITLE && (buttons & SNAKE_BTN_OK)) {
+            /* Every start runs a fresh zeroing window; a saved NVS pose is a
+             * fallback for the IMU task, never a reason to skip calibration. */
+            snake_begin_calibration(&s_game);
+            buttons &= (uint8_t)~SNAKE_BTN_OK;
+            started = true;
+            ESP_LOGI(TAG, "start requested (tap/OK) -> calibration");
+        }
+        const int8_t tilt = imu_port_take_direction();
+        if (!started) {
+            /* snake_begin_calibration() already composed a dirty card; ticking
+             * now would overwrite it (the core requires !dirty before tick). */
+            snake_tick(&s_game, buttons, tilt);
+        }
         drain_sounds();
 
         /* Persist once per run, when the GAME_OVER card appears. */
@@ -286,6 +355,14 @@ void app_main(void)
     err = input_port_init();
     if (err != ESP_OK) {
         reboot_soon("key init failed");
+    }
+
+    /* 4.5 Touch: GT911 on I2C0. A tap is the OK button; a failure is
+     *      non-fatal because AI/OK still works. */
+    err = touch_port_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "touch unavailable (%s); AI/OK still starts",
+                 esp_err_to_name(err));
     }
 
     /* 5. Buzzer. Non-critical: play muted if LEDC cannot start. */
@@ -336,8 +413,8 @@ void app_main(void)
     s_ctx.high_score = storage_port_load_hiscore();
     s_ctx.imu_calibrated = have_calib;
 
-    ESP_LOGI(TAG, "keys: OK(4)=start/pause/resume/title UP(5)=recalibrate (pause/over)");
-    ESP_LOGI(TAG, "tilt: deadzone 12 deg, rearm 6 deg, 3 stable samples; axis map %d/%d/%d",
+    ESP_LOGI(TAG, "keys: OK(4)=start/pause DOWN(6)=set zero UP(5)=recalibrate (pause/over)");
+    ESP_LOGI(TAG, "tilt: deadzone 8 deg, rearm 4 deg, 2 stable samples; axis map %d/%d/%d",
              IMU_PORT_AXIS_SWAP_XY, IMU_PORT_AXIS_INVERT_ROLL, IMU_PORT_AXIS_INVERT_PITCH);
 
     if (xTaskCreate(game_task, "gs_game", GS_GAME_TASK_STACK, &s_ctx, GS_GAME_TASK_PRIO, NULL) !=

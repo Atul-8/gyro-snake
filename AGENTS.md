@@ -19,6 +19,11 @@
   before claiming the tilt mapping works.
 - **No fake hardware claims.** A build is not a flash; a desktop screenshot is not a
   device observation. Only `idf.py -p <PORT> flash monitor` counts as on-device.
+- **Touch coordinates come from the device.** Read `GT911_REG_COORD_RES (0x8146)` at
+  boot and use the range it reports (this unit says `480x800`); the vendor
+  `sticky_touch.cpp` hardcodes `800x480` for a different canvas. Log every press as
+  `tap raw=... -> screen=...` so one tap in a known corner can falsify the transform.
+  See `.ai/errors/raw/ERR-001.md` / `META-001`.
 - **No third-party game IP.** Snake is a generic game; keep art, names and sounds
   original. No Nintendo/Mario/etc. names, sprites or melodies.
 - **Keep `snake.h` and `imu_core.h` frozen.** Additions go through the architect; the

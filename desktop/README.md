@@ -90,9 +90,16 @@ python gyro-snake/desktop/play.py
 # 或 bash gyro-snake/desktop/play.sh
 ```
 
-启动后是 TITLE 卡。首次按 START（未校准）会进入 3 秒模拟校准：
-窗口逐帧调用 `snake_calibration_progress()`，进度条由核心绘制；
-3 秒后调用 `snake_calibration_done(true)`，直接进入 PLAY。
+启动后是 TITLE 卡。**每次**按 START（或点击屏幕）都会进入约 3 秒的
+模拟校准归零，即使之前的运行已经 calibrated；窗口逐帧调用
+`snake_calibration_progress()`，进度条由核心绘制，3 秒后调用
+`snake_calibration_done(true)`，进入 PLAY。GUI 的 START 路径不会直接
+调用 `snake_start_play()` 跳过校准。
+
+核心标题卡现在是 `TAP TO START` / `OR PRESS OK` /
+`AUTO-CALIBRATES ON START`；窗口底部提示同步显示
+“点击屏幕或按 OK 开始 · 自动校准 3 秒”（英文为
+`TAP SCREEN OR PRESS OK · AUTO-CALIBRATES 3S`）。
 
 可选启动参数：
 
@@ -111,7 +118,8 @@ python gyro-snake/desktop/play.py --speed 4 --timing turbo --lang en
 
 | 按钮 | 行为 |
 | --- | --- |
-| **START / PAUSE / RESUME / RESTART** | TITLE：未校准则校准，已校准则开局；PLAY：暂停；PAUSE：继续；结束/死亡：一键回到 TITLE 并重新开局 |
+| **点击屏幕** | 等同 OK/START：TITLE 开始并进入 3 秒模拟校准；PLAY 暂停；PAUSE 继续；GAME_OVER 回标题/重开。屏幕区域与下方按钮/倾斜盘不重叠 |
+| **START / PAUSE / RESUME / RESTART** | TITLE：每次开始都进入 3 秒模拟校准（即使已校准）；PLAY：暂停；PAUSE：继续；结束/死亡：回 TITLE 并重新校准开局 |
 | **CALIBRATE** | 随时重新校准（标题/暂停/游戏中/结束均可）；完成后从 PLAY 重新开始 |
 | **CENTER** | 倾斜盘回中，`tilt_dir = NONE` |
 | **1x / 2x / 4x** | 只会缩放模拟等待时间，不改变核心规则 |
@@ -129,6 +137,14 @@ python gyro-snake/desktop/play.py --speed 4 --timing turbo --lang en
 - 若请求方向与 core 当前方向相反（180°），core 会忽略；界面显示
   `· REV` 提醒，蛇继续原方向。
 - 倾斜向量在松开鼠标后保持，便于“设好方向让蛇走”；按 CENTER 回中。
+
+### 5.2.1 画面里的倾斜球
+
+- 游戏画面（纸色屏幕）右下角有和真机相同的倾斜球：外圈 20° 满量程，内圈 8° 死区，
+  圆点 = 当前倾斜，粗刻度 = 当前方向。
+- **PLAY / PAUSE 时点击这个球** = 把当前倾斜设为零点（等同固件 DOWN 键 / CENTER）；
+  点屏幕其他位置仍然是 OK（开始/暂停/继续）。
+- 球由固件的 `tilt_ball.c` 直接画进 MONO 帧，桌面和真机共用同一份绘制代码。
 
 ### 5.3 键盘
 
@@ -186,7 +202,7 @@ core 状态里，不写桌面文件——桌面倾斜盘本来就是虚拟 IMU�
 
 ```bash
 python gyro-snake/desktop/play.py --selftest --ticks 240 \
-    --out desktop/out/selftest
+    --out gyro-snake/desktop/out/selftest
 ```
 
 它会：
@@ -202,8 +218,9 @@ python gyro-snake/desktop/play.py --selftest --ticks 240 \
 SNAKE_SELFTEST ok frames=14 score=10
 ```
 
-`--out` 的相对路径：以 `desktop/` 开头时钉到 `gyro-snake/desktop/` 下，
-所以从仓库根或 `gyro-snake/` 执行都会写到 `gyro-snake/desktop/out/...`。
+`--out` 的相对路径：以 `desktop/` 或 `gyro-snake/desktop/` 开头时都钉到
+`gyro-snake/desktop/` 下，所以从仓库根或 `gyro-snake/` 执行都会写到
+`gyro-snake/desktop/out/...`。
 
 ---
 
@@ -211,13 +228,14 @@ SNAKE_SELFTEST ok frames=14 score=10
 
 ```bash
 python gyro-snake/desktop/play.py --window-test 3 \
-    --out desktop/out/window.png
+    --out gyro-snake/desktop/out/window.png
 ```
 
 流程：
 
 1. `SetProcessDpiAwareness(1)`，再创建 520x1000 窗口；
-2. 跳过 3 秒校准动画（直接校准并进入 PLAY），以 FAST/2x 跑方形 demo；
+2. 测试夹具跳过 3 秒校准动画（直接校准并进入 PLAY），以 FAST/2x 跑方形
+   demo；这是自动化路径，不是用户按 START 的路径；
 3. 3 秒后用 `ImageGrab` 截取窗口客户区；
 4. 校验窗口尺寸 520x1000、屏幕面板非空白、控制区有绿色强调；
 5. 打印：
@@ -230,7 +248,8 @@ SNAKE_WINDOW ok path=...\desktop\out\window.png size=520x1000
 蛇、苹果，以及下方的倾斜盘和 START/PAUSE、CALIBRATE、CENTER 等按钮。
 
 窗口测试会强制英文界面、2x、FAST、静音，且不写 `settings.json` /
-`highscore.json`，以便得到可复现的截图。
+`highscore.json`，以便得到可复现的截图。`out/window.png` 可复制为
+`gyro-snake/docs/screenshot.png` 作为文档截图。
 
 ---
 
@@ -248,7 +267,7 @@ SNAKE_WINDOW ok path=...\desktop\out\window.png size=520x1000
 | `gs_begin_calibration` | 进入 CALIBRATING 并生成 0% 卡 |
 | `gs_calib_progress(pct)` | 设置 0..100；下一次 tick 重绘卡片 |
 | `gs_calib_done(ok)` | 成功则 `start_run()` 进入 PLAY |
-| `gs_start_play` | 已校准则开局，否则回落到校准 |
+| `gs_start_play` | 低层 API：已校准则直接开局，否则回落到校准。GUI 的 START/屏幕点击**不调用**它，总是先走 3 秒校准 |
 | `gs_set_high(v)` | 单调最高分 |
 | `gs_mono` / `gs_gray4` | 借出的帧缓冲指针（调用方立即复制） |
 | `gs_frame` / `gs_state` / `gs_card` | 帧类型 / 状态 / 卡片 |
@@ -278,7 +297,8 @@ gyro-snake/desktop/
 └─ out/             截图、录制、自测输出（gitignore）
 ```
 
-运行时会生成 `highscore.json` 和 `settings.json`。
+运行时会生成 `highscore.json` 和 `settings.json`。文档截图是
+`gyro-snake/docs/screenshot.png`（由 `out/window.png` 复制）。
 
 ---
 
@@ -292,15 +312,16 @@ build ok
 $ python gyro-snake/desktop/test_dll.py
 DLL_SMOKE ok
 
-$ python gyro-snake/desktop/play.py --selftest --ticks 240 --out desktop/out/selftest
+$ python gyro-snake/desktop/play.py --selftest --ticks 240 --out gyro-snake/desktop/out/selftest
 SNAKE_SELFTEST ok frames=14 score=10
 
-$ python gyro-snake/desktop/play.py --window-test 3 --out desktop/out/window.png
+$ python gyro-snake/desktop/play.py --window-test 3 --out gyro-snake/desktop/out/window.png
 SNAKE_WINDOW ok path=.../desktop/out/window.png size=520x1000
 ```
 
-截图 `desktop/out/window.png` 已人工检查：480x800 屏幕（0.75 缩放）、
-HUD、蛇、苹果、倾斜盘、START/PAUSE、CALIBRATE 均可见。
+截图 `gyro-snake/docs/screenshot.png`（源文件 `desktop/out/window.png`）
+已人工检查：480x800 屏幕（0.75 缩放）、HUD、蛇、苹果、倾斜盘、
+START/PAUSE、CALIBRATE 均可见。
 
 ---
 
@@ -310,21 +331,19 @@ HUD、蛇、苹果、倾斜盘、START/PAUSE、CALIBRATE 均可见。
   判断真机轴向、噪声或校准算法。
 - **模拟时序**：所有 ms 为模拟值，EPD 档也不是真机实测；真机残影、
   刷新耗时、按键手感、蜂鸣器音量不在覆盖范围。
-- **校准不持久化**：每次进程启动首次 START 仍会走 3 秒校准；最高分和
-  界面设置会持久化。
+- **每次 START 都重新校准**：即使上一次运行已经 calibrated，按 START/
+  点击屏幕仍会走约 3 秒模拟归零；校准偏置只存在于本次进程的 core 状态里，
+  不写桌面文件。最高分和界面设置会持久化。
 - **EPD 档校准卡更新少**：gray4 校准卡走 1800 ms 全刷，3 秒校准期间只能
   显示少数几帧进度；默认 FAST 档会显示约 6 帧进度。这是模拟电子墨水
   刷新节奏的结果，不是卡死。
-- **核心 HUD 的 UP/DOWN 小箭头视觉上是反的**：`render.c` 的竖排箭头
-  绘制方向与 `DIR UP/DOWN` 文本相反；文字本身正确。`snake.h` / core
-  已冻结，桌面端未改动它，等 core 后续版本修正。
 - **音效**：依赖 `winsound.Beep`；远程桌面/无声卡环境会静默失败，
   界面显示 `SOUND N/A` 或仍可开关，不影响游戏。
 - **窗口测试失败**：确认桌面可见、分辨率 ≥ 520x1060、没有把窗口最小化；
   `ImageGrab` 需要真实桌面会话。DPI 已在创建 Tk 前设为 system aware。
 - **DLL 加载失败**：确认 Python 与 DLL 同为 64 位；`build.sh` 已使用
   `-static-libgcc`，避免 MinGW 运行库缺失。
-- **路径**：`--out desktop/...` 固定落到 `gyro-snake/desktop/` 下；绝对
-  路径原样使用。
+- **路径**：`--out desktop/...` 或 `--out gyro-snake/desktop/...` 都固定
+  落到 `gyro-snake/desktop/` 下；绝对路径原样使用。
 - 核心 SNAKE 状态/卡片文本（`TITLE`、`PAUSE`、`GAME OVER` 等）由 C 核心
   绘制，保持英文；窗口外壳的中英文切换不影响它们。

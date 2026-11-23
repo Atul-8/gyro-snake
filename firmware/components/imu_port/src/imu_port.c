@@ -67,8 +67,12 @@ static bool s_initialized;
 static atomic_bool s_sensor_ready;
 static atomic_bool s_task_started;
 static atomic_bool s_calib_request;
+static atomic_bool s_rezero_request;
 static atomic_bool s_calib_result_ready;
 static atomic_int s_direction = IMU_DIR_NONE;
+static atomic_int s_direction_latch = IMU_DIR_NONE;
+static atomic_int s_tilt_roll_cdeg;
+static atomic_int s_tilt_pitch_cdeg;
 static atomic_uint s_progress;
 
 static imu_port_calib_result_t s_calib_result;
@@ -177,6 +181,7 @@ static void imu_fail_calibration(const char *why)
     s_calibrating = false;
     atomic_store(&s_progress, 0u);
     atomic_store(&s_direction, IMU_DIR_NONE);
+    atomic_store(&s_direction_latch, IMU_DIR_NONE);
     tilt_reset(&s_tilt);
     imu_publish_result(false);
 }
@@ -188,6 +193,7 @@ static void imu_calibration_begin(void)
     s_calibrating = true;
     atomic_store(&s_progress, 0u);
     atomic_store(&s_direction, IMU_DIR_NONE);
+    atomic_store(&s_direction_latch, IMU_DIR_NONE);
     tilt_reset(&s_tilt);
     ESP_LOGI(TAG, "calibration window started: %d samples at %d Hz",
              IMU_PORT_CALIB_SAMPLES, IMU_PORT_SAMPLE_HZ);
@@ -257,6 +263,23 @@ static void imu_task(void *arg)
             }
         }
 
+        if (atomic_exchange_explicit(&s_rezero_request, false, memory_order_acquire)) {
+            if (atomic_load(&s_sensor_ready) && !s_calibrating) {
+                float roll = 0.0f;
+                float pitch = 0.0f;
+                float yaw = 0.0f;
+                mahony_get_angles(&s_mahony, &roll, &pitch, &yaw);
+                s_neutral_roll = roll * GS_IMU_RAD_TO_DEG;
+                s_neutral_pitch = pitch * GS_IMU_RAD_TO_DEG;
+                tilt_reset(&s_tilt);
+                atomic_store(&s_direction, IMU_DIR_NONE);
+    atomic_store(&s_direction_latch, IMU_DIR_NONE);
+                ESP_LOGI(TAG, "re-zero: neutral roll=%d pitch=%d cdeg",
+                         (int)(s_neutral_roll * 100.0f),
+                         (int)(s_neutral_pitch * 100.0f));
+            }
+        }
+
         if (!atomic_load(&s_sensor_ready)) {
             if (--probe_countdown <= 0) {
                 probe_countdown = GS_IMU_PROBE_EVERY_TICKS;
@@ -283,6 +306,7 @@ static void imu_task(void *arg)
                 fail_run = 0;
                 atomic_store(&s_sensor_ready, false);
                 atomic_store(&s_direction, IMU_DIR_NONE);
+    atomic_store(&s_direction_latch, IMU_DIR_NONE);
                 ESP_LOGE(TAG, "%d consecutive read failures; re-probing the sensor",
                          GS_IMU_READ_FAIL_LIMIT);
             }
@@ -318,8 +342,32 @@ static void imu_task(void *arg)
 
             const float roll_deg = roll * GS_IMU_RAD_TO_DEG - s_neutral_roll;
             const float pitch_deg = pitch * GS_IMU_RAD_TO_DEG - s_neutral_pitch;
+            atomic_store(&s_tilt_roll_cdeg, (int)(roll_deg * 100.0f));
+            atomic_store(&s_tilt_pitch_cdeg, (int)(pitch_deg * 100.0f));
             const int8_t dir = tilt_update(&s_tilt, roll_deg, pitch_deg);
             atomic_store(&s_direction, dir);
+            if (dir != IMU_DIR_NONE) {
+                /* Latch the request until the game task consumes it: the
+                 * e-paper tick may be 0.85 s away, and a quick tilt must not
+                 * be lost when the device returns to center. */
+                atomic_store(&s_direction_latch, dir);
+            }
+
+            /* 10 Hz telemetry for the desktop IMU monitor:
+             * r/p relative deci-deg, ar/ap absolute deci-deg, d direction,
+             * gx/gy/gz mdps, ax/ay/az mg. */
+            static uint32_t telemetry_div;
+            if (++telemetry_div >= 10u) {
+                telemetry_div = 0;
+                ESP_LOGI(TAG,
+                         "IMU r=%d p=%d ar=%d ap=%d d=%d gx=%d gy=%d gz=%d ax=%d ay=%d az=%d",
+                         (int)(roll_deg * 10.0f), (int)(pitch_deg * 10.0f),
+                         (int)(roll * GS_IMU_RAD_TO_DEG * 10.0f),
+                         (int)(pitch * GS_IMU_RAD_TO_DEG * 10.0f), (int)dir,
+                         (int)(corrected.gx * 1000.0f), (int)(corrected.gy * 1000.0f),
+                         (int)(corrected.gz * 1000.0f), (int)(corrected.ax * 1000.0f),
+                         (int)(corrected.ay * 1000.0f), (int)(corrected.az * 1000.0f));
+            }
         }
 
         if (xTaskDelayUntil(&last, period) == pdFALSE) last = xTaskGetTickCount();
@@ -338,6 +386,7 @@ esp_err_t imu_port_init(void)
     atomic_store(&s_calib_request, false);
     atomic_store(&s_calib_result_ready, false);
     atomic_store(&s_direction, IMU_DIR_NONE);
+    atomic_store(&s_direction_latch, IMU_DIR_NONE);
     atomic_store(&s_progress, 0u);
 
     memset(&s_bias, 0, sizeof(s_bias));
@@ -348,7 +397,7 @@ esp_err_t imu_port_init(void)
     s_calibrating = false;
 
     mahony_init(&s_mahony, 2.0f, 0.0f, 0.01f);
-    tilt_init(&s_tilt, 12.0f, 6.0f, 3);
+    tilt_init(&s_tilt, 8.0f, 4.0f, 2);
     tilt_set_axis(&s_tilt, IMU_PORT_AXIS_SWAP_XY != 0, IMU_PORT_AXIS_INVERT_ROLL != 0,
                   IMU_PORT_AXIS_INVERT_PITCH != 0);
 
@@ -446,6 +495,15 @@ void imu_port_request_calibration(void)
     atomic_store_explicit(&s_calib_request, true, memory_order_release);
 }
 
+void imu_port_request_rezero(void)
+{
+    if (!atomic_load(&s_task_started)) {
+        ESP_LOGW(TAG, "re-zero requested but the IMU task is not running");
+        return;
+    }
+    atomic_store_explicit(&s_rezero_request, true, memory_order_release);
+}
+
 uint8_t imu_port_calib_progress(void)
 {
     const unsigned pct = atomic_load(&s_progress);
@@ -465,6 +523,17 @@ bool imu_port_take_calib_result(imu_port_calib_result_t *out)
 int8_t imu_port_direction(void)
 {
     return (int8_t)atomic_load(&s_direction);
+}
+
+int8_t imu_port_take_direction(void)
+{
+    return (int8_t)atomic_exchange(&s_direction_latch, IMU_DIR_NONE);
+}
+
+void imu_port_get_tilt(int *roll_cdeg, int *pitch_cdeg)
+{
+    if (roll_cdeg) *roll_cdeg = (int)atomic_load(&s_tilt_roll_cdeg);
+    if (pitch_cdeg) *pitch_cdeg = (int)atomic_load(&s_tilt_pitch_cdeg);
 }
 
 bool imu_port_ready(void)

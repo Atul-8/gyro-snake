@@ -5,10 +5,12 @@ idf_component_register(
         "src/input_port.c"
         "src/audio_port.c"
         "src/storage_port.c"
+        "src/tilt_ball.c"
     INCLUDE_DIRS "include"
     REQUIRES
         bsp
         game_core
+        imu_core
         nvs_flash
         esp_timer
         esp_driver_gpio

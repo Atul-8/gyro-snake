@@ -21,6 +21,9 @@
 
 #include <string.h>
 
+/* The only board-side symbol the simulator links: pure 1 bpp pixel drawing. */
+void board_draw_tilt_ball(uint8_t *mono, int roll_cdeg, int pitch_cdeg, int dir);
+
 #if defined(_WIN32)
 #  define GS_API __declspec(dllexport)
 #else
@@ -139,6 +142,26 @@ GS_API const uint8_t *gs_mono(void)
 GS_API const uint8_t *gs_gray4(void)
 {
     return g_ready ? snake_gray4(&g_game) : NULL;
+}
+
+/*
+ * Stamp the live tilt ball onto the current MONO frame, exactly as the device
+ * does before handing the frame to the panel. Call once per fresh frame and
+ * before gs_mono(); the core recomposes every MONO frame from a cleared
+ * buffer, so the stamp never accumulates.
+ */
+GS_API void gs_draw_ball(int roll_cdeg, int pitch_cdeg, int dir)
+{
+    const snake_status_t *s;
+
+    if (!g_ready) {
+        return;
+    }
+    s = snake_status(&g_game);
+    if (!s || s->frame != SNAKE_FRAME_MONO) {
+        return;
+    }
+    board_draw_tilt_ball(g_mono, roll_cdeg, pitch_cdeg, dir);
 }
 
 /* ------------------------------------------------------------------ */
