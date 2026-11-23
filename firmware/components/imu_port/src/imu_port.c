@@ -305,7 +305,11 @@ static void imu_task(void *arg)
             s_axis_swap = s_req_swap;
             s_axis_inv_roll = s_req_inv_roll;
             s_axis_inv_pitch = s_req_inv_pitch;
-            tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
+            /* The mapping is applied upstream on the relative angles; the
+             * tilt filter itself always runs with identity mapping. */
+            tilt_reset(&s_tilt);
+            atomic_store(&s_direction, IMU_DIR_NONE);
+            atomic_store(&s_direction_latch, IMU_DIR_NONE);
             ESP_LOGI(TAG, "axis map now swap=%d invert_roll=%d invert_pitch=%d",
                      (int)s_axis_swap, (int)s_axis_inv_roll, (int)s_axis_inv_pitch);
         }
@@ -315,7 +319,6 @@ static void imu_task(void *arg)
             if (s_req_rearm > 0.0f) s_rearm = s_req_rearm;
             if (s_req_stable > 0) s_stable = s_req_stable;
             tilt_init(&s_tilt, s_deadzone, s_rearm, s_stable);
-            tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
             ESP_LOGI(TAG, "tilt params now deadzone=%d rearm=%d stable=%d ddeg",
                      (int)(s_deadzone * 10.0f), (int)(s_rearm * 10.0f), s_stable);
         }
@@ -382,9 +385,25 @@ static void imu_task(void *arg)
 
             const float roll_deg = roll * GS_IMU_RAD_TO_DEG - s_neutral_roll;
             const float pitch_deg = pitch * GS_IMU_RAD_TO_DEG - s_neutral_pitch;
-            atomic_store(&s_tilt_roll_cdeg, (int)(roll_deg * 100.0f));
-            atomic_store(&s_tilt_pitch_cdeg, (int)(pitch_deg * 100.0f));
-            const int8_t dir = tilt_update(&s_tilt, roll_deg, pitch_deg);
+
+            /* Sensor frame -> screen frame. The mapping is applied HERE, once,
+             * so the direction filter, the on-screen ball and the telemetry
+             * all see the same screen-natural angles; the tilt filter itself
+             * runs with identity mapping. Hardware check (2026-11-23): the
+             * sensor axes are rotated 90 deg vs the screen (physical UP was
+             * reported as RIGHT), so swap_xy defaults to 1. */
+            float sroll = roll_deg;
+            float spitch = pitch_deg;
+            if (s_axis_swap) {
+                sroll = pitch_deg;
+                spitch = roll_deg;
+            }
+            if (s_axis_inv_roll) sroll = -sroll;
+            if (s_axis_inv_pitch) spitch = -spitch;
+
+            atomic_store(&s_tilt_roll_cdeg, (int)(sroll * 100.0f));
+            atomic_store(&s_tilt_pitch_cdeg, (int)(spitch * 100.0f));
+            const int8_t dir = tilt_update(&s_tilt, sroll, spitch);
             atomic_store(&s_direction, dir);
             if (dir != IMU_DIR_NONE) {
                 /* Latch the request until the game task consumes it: the
@@ -409,17 +428,27 @@ static void imu_task(void *arg)
                 s_telemetry_ticks = 0;
                 const float an = sqrtf(raw.ax * raw.ax + raw.ay * raw.ay +
                                        raw.az * raw.az);
-                const float aroll = atan2f(raw.ay, raw.az) * GS_IMU_RAD_TO_DEG;
-                const float apitch =
+                float aroll = atan2f(raw.ay, raw.az) * GS_IMU_RAD_TO_DEG;
+                float apitch =
                     atan2f(-raw.ax, sqrtf(raw.ay * raw.ay + raw.az * raw.az)) *
                     GS_IMU_RAD_TO_DEG;
+                /* Accel-only angles into the screen frame, like sroll/spitch. */
+                float saroll = aroll - s_neutral_roll;
+                float sapitch = apitch - s_neutral_pitch;
+                if (s_axis_swap) {
+                    const float tmp = saroll;
+                    saroll = sapitch;
+                    sapitch = tmp;
+                }
+                if (s_axis_inv_roll) saroll = -saroll;
+                if (s_axis_inv_pitch) sapitch = -sapitch;
                 const int map_bits = (s_axis_swap ? 4 : 0) |
                                      (s_axis_inv_roll ? 2 : 0) |
                                      (s_axis_inv_pitch ? 1 : 0);
                 ESP_LOGI(TAG,
                          "IMU r=%d p=%d ar=%d ap=%d d=%d gx=%d gy=%d gz=%d "
                          "ax=%d ay=%d az=%d m=%d dz=%d ra=%d lk=%d an=%d pr=%d pp=%d",
-                         (int)(roll_deg * 10.0f), (int)(pitch_deg * 10.0f),
+                         (int)(sroll * 10.0f), (int)(spitch * 10.0f),
                          (int)(roll * GS_IMU_RAD_TO_DEG * 10.0f),
                          (int)(pitch * GS_IMU_RAD_TO_DEG * 10.0f), (int)dir,
                          (int)(corrected.gx * 1000.0f), (int)(corrected.gy * 1000.0f),
@@ -427,8 +456,7 @@ static void imu_task(void *arg)
                          (int)(corrected.ay * 1000.0f), (int)(corrected.az * 1000.0f),
                          map_bits, (int)(s_deadzone * 10.0f),
                          (int)(s_rearm * 10.0f), s_tilt.locked, (int)(an * 1000.0f),
-                         (int)((aroll - s_neutral_roll) * 10.0f),
-                         (int)((apitch - s_neutral_pitch) * 10.0f));
+                         (int)(saroll * 10.0f), (int)(sapitch * 10.0f));
             }
         }
 
@@ -471,7 +499,6 @@ esp_err_t imu_port_init(void)
 
     mahony_init(&s_mahony, 2.0f, 0.0f, 0.01f);
     tilt_init(&s_tilt, s_deadzone, s_rearm, s_stable);
-    tilt_set_axis(&s_tilt, s_axis_swap, s_axis_inv_roll, s_axis_inv_pitch);
 
     i2c_master_bus_config_t bus_cfg;
     memset(&bus_cfg, 0, sizeof(bus_cfg));
