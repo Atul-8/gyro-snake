@@ -8,6 +8,9 @@ firmware/dependencies.lock.tmp
 # Host / desktop build artifacts
 host/build/
 host/out/
+host/preview/*.exe
+host/preview/*.pgm
+host/preview/*.png
 desktop/build/
 desktop/out/
 
@@ -15,6 +18,7 @@ desktop/out/
 desktop/settings.json
 desktop/highscore.json
 .cache/
+.v2c/
 vendor/
 .mimosa/
 __pycache__/

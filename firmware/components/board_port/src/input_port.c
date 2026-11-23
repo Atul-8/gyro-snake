@@ -7,12 +7,12 @@
  * end of each observation window and converts the events into the
  * SNAKE_BTN_* activity mask.
  *
- * snake.h defines that mask as *press edges* since the previous tick (only
- * DOWN would be level-sensitive, and this game does not use DOWN), so held
+ * snake.h defines that mask as *press edges* since the previous tick, so held
  * levels are deliberately not added here. A press during a long e-paper
  * refresh is latched in the queue and delivered exactly once on the next tick.
  *
- * Mapping: AI (GPIO4, the key labelled OK/Power) = OK, UP (GPIO5) = UP.
+ * Mapping: AI (GPIO4) = OK, UP (GPIO5) = recalibrate,
+ *          DOWN (GPIO6) = set the current pose as the tilt zero.
  */
 #include "board_port.h"
 
@@ -56,8 +56,10 @@ static uint8_t button_bit(bsp_button_id_t id)
         return SNAKE_BTN_OK;
     case BSP_BUTTON_UP:
         return SNAKE_BTN_UP;
+    case BSP_BUTTON_DOWN:
+        return SNAKE_BTN_DOWN;
     default:
-        return 0; /* DOWN is reserved by the requirements and unused. */
+        return 0;
     }
 }
 
@@ -76,7 +78,7 @@ esp_err_t input_port_init(void)
         s_events = NULL;
         return err;
     }
-    ESP_LOGI(TAG, "keys ready: AI(4)=OK UP(5)=recalibrate, press edges queued");
+    ESP_LOGI(TAG, "keys ready: AI(4)=OK UP(5)=recalibrate DOWN(6)=set zero");
     return ESP_OK;
 }
 

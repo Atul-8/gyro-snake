@@ -644,7 +644,7 @@ static void card_frame(uint8_t *p)
 
 static void card_button(uint8_t *p, int y, const char *label)
 {
-    int w = 180;
+    int w = 240;
     int h = 56;
     int x = (SNAKE_SCREEN_W - w) / 2;
 
@@ -677,21 +677,20 @@ static void card_title(uint8_t *p, const snake_status_t *st)
     g4_head(p, 266, 264, SNAKE_DIR_RIGHT, 0);
     g4_apple(p, 336, 280, 2);
 
-    card_button(p, 380, "PRESS OK");
+    card_button(p, 380, "TAP TO START");
+    g4_text_centered(p, 450, "OR PRESS OK", 2, 1);
 
     {
         char full[10];
         full[0] = 'H'; full[1] = 'I'; full[2] = 'G'; full[3] = 'H'; full[4] = ' ';
         fmt_u16(&full[5], st->high_score, 4);
-        g4_text_centered(p, 470, full, 2, 0);
+        g4_text_centered(p, 490, full, 2, 0);
     }
 
-    if (st->calibrated) {
-        g4_text_centered(p, 520, "CALIBRATED", 2, 1);
-    } else {
-        g4_text_centered(p, 520, "CALIBRATES ON FIRST PLAY", 2, 1);
-    }
+    g4_text_centered(p, 520, "AUTO-CALIBRATES ON START", 2, 1);
     g4_text_centered(p, 566, "FILL THE BOARD TO WIN", 2, 1);
+    g4_text_centered(p, 610, "DOWN = SET ZERO", 2, 1);
+    g4_text_centered(p, 640, "UP = RE-CAL IN PAUSE", 2, 1);
 
     for (i = 60; i < 420; i += 24) {
         g4_rect(p, i, 700, 12, 6, 2);
@@ -736,9 +735,9 @@ static void card_calibrating(uint8_t *p, const snake_status_t *st)
         g4_text_centered(p, 420, pct, 3, 0);
     }
 
-    g4_text_centered(p, 500, "KEEP THE DEVICE STEADY", 2, 1);
-    g4_text_centered(p, 546, "DO NOT TILT THE BOARD", 2, 2);
-    g4_text_centered(p, 640, "SAMPLES 300", 2, 2);
+    g4_text_centered(p, 500, "KEEP YOUR PLAY POSE", 2, 1);
+    g4_text_centered(p, 546, "DO NOT MOVE FOR 4 S", 2, 2);
+    g4_text_centered(p, 640, "SAMPLES 400", 2, 2);
 }
 
 static void card_game_over(uint8_t *p, const snake_status_t *st, int win)

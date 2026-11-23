@@ -28,8 +28,8 @@
 extern "C" {
 #endif
 
-/* Calibration window: 300 samples at 100 Hz (about 3 s). */
-#define IMU_PORT_CALIB_SAMPLES 300
+/* Calibration window: 400 samples at 100 Hz (4 s) on every start. */
+#define IMU_PORT_CALIB_SAMPLES 400
 #define IMU_PORT_SAMPLE_HZ 100
 
 /*
@@ -62,9 +62,14 @@ void imu_port_apply_saved(const board_imu_calib_t *calib);
 /* Start the 100 Hz task. Idempotent. */
 esp_err_t imu_port_start(void);
 
-/* Ask for a fresh 300-sample calibration. Never blocks. If the task is not
+/* Ask for a fresh 400-sample calibration. Never blocks. If the task is not
  * running, an immediate failure result is published instead. */
 void imu_port_request_calibration(void);
+
+/* Make the current Mahony roll/pitch the neutral pose immediately. Intended
+ * for PLAY: hold the device the way you are actually playing, press UP, and
+ * the tilt baseline is re-zeroed without restarting the run. */
+void imu_port_request_rezero(void);
 
 /* 0..100 progress of the current calibration window. */
 uint8_t imu_port_calib_progress(void);
@@ -74,6 +79,13 @@ bool imu_port_take_calib_result(imu_port_calib_result_t *out);
 
 /* Latest stable tilt direction (IMU_DIR_*), published atomically. */
 int8_t imu_port_direction(void);
+
+/* Latched direction since the previous call (-1 if none). A quick tilt that
+ * returns to center before the next e-paper tick is still delivered once. */
+int8_t imu_port_take_direction(void);
+
+/* Latest relative tilt in deci-degrees, for the on-screen ball. */
+void imu_port_get_tilt(int *roll_cdeg, int *pitch_cdeg);
 
 /* True while the sensor answers and is configured. */
 bool imu_port_ready(void);

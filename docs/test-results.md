@@ -92,3 +92,66 @@ SHA-256 `2142664f33b372e3c679da26f05992f15f0acbf70718a6d30debe2168da4c168`。
 
 桌面模拟器的 550/1800/1500 ms 与 FAST/TURBO 都是模拟值，不是面板实测；
 桌面倾斜盘是虚拟 IMU，不读取真实 LSM6DS3TR-C。
+
+## 6. 2026-11-23 更新：触摸、归零、倾斜球
+
+### 6.1 固件构建与烧录
+
+```text
+[vms] 退出码 0 / 耗时 37s / 错误行 0
+gyro_snake.bin binary size 0x49f30 bytes (302,896 B)
+Smallest app partition is 0x300000 bytes. 0x2b60d0 bytes (90%) free.
+```
+
+```text
+esptool --chip esp32s3 -p COM65 -b 460800 write-flash \
+  0x0 bootloader.bin 0x8000 partition-table.bin 0x10000 gyro_snake.bin
+Wrote 302896 bytes ... Hash of data verified.
+```
+
+### 6.2 启动日志（真机，COM65，115200）
+
+```text
+I (761) gyro_snake: power hold high: GPIO45(HOLD)=1 GPIO46(LOCK)=1
+I (1180) gs_touch: GT911 ready: address=0x14 id=911 res=480x800
+I (1180) gs_touch: touch polling every 30 ms
+I (1213) gs_imu: LSM6DS3TR-C on I2C1 SDA=1 SCL=0 @0x6A, 104 Hz, +-2 g, +-500 dps
+I (1225) gyro_snake: tilt: deadzone 8 deg, rearm 4 deg, 2 stable samples; axis map 0/0/0
+I (2661) bsp_epd: e-paper gray4 refresh in 1219 ms
+I (2661) gyro_snake: gray4 full 1404 ms | state=TITLE score=0 high=0
+```
+
+**关键发现**：GT911 的 0x8146 分辨率寄存器返回 **480x800**（不是 800x480），
+因此坐标映射按同轴缩放处理（raw X → 屏幕 X，raw Y → 屏幕 Y）；轴向翻转尚未
+用“点击已知角落”实测标定。驱动在每次按下时打印：
+
+```text
+gs_touch: tap raw=<rx>,<ry> -> screen=<sx>,<sy>
+```
+
+游戏侧归零判定接受**任意角落**的点击（x ≤ 100 或 ≥ 380，且 y ≤ 100 或 ≥ 700），
+所以在四种翻转组合下，点击右下角倾斜球都能触发归零；日志用于事后收紧到单一角落。
+
+### 6.3 倾斜球与归零
+
+- `board_port/src/tilt_ball.c`：纯 1 bpp 绘制，外圈 26 px / 20° 满量程，
+  内圈 8° 死区，圆点 = 相对 roll/pitch，粗刻度 = 当前方向。
+- 固件在 MONO 帧交给面板前调用 `board_draw_tilt_ball()`；
+  PLAY 每帧由核心整帧重绘，不会留下拖影。
+- 点击屏幕角落（PLAY/PAUSE）或按 DOWN(6) → `imu_port_request_rezero()`。
+- 桌面 DLL 链接同一份 `tilt_ball.c`，`gs_draw_ball()` 在取帧前盖章；
+  GUI 点击画面右下角的球 → `center_tilt()`。
+
+### 6.4 桌面回归
+
+```text
+SNAKE_SELFTEST ok frames=14 score=10
+SNAKE_WINDOW ok path=desktop\out\window.png size=520x1000
+```
+
+### 6.5 仍未验证
+
+- GT911 轴向翻转（需用户点击一次已知角落，读 `tap raw=...` 日志）。
+- 倾斜球在真机电子纸上的实际可读性（1 bpp、160 dpi 下的细线）。
+- 电池供电下的功率保持（GPIO45/46 已确认读回 1，但只在 USB 下观察）。
+- IMU 四方向物理映射（`IMU_PORT_AXIS_SWAP_XY / INVERT_ROLL / INVERT_PITCH`）。

@@ -109,6 +109,11 @@ esp_err_t display_port_refresh(const board_frame_t *frame, uint32_t *out_ms,
  * refresh so the retry passes prev = NULL, as bsp_epd.h requires). */
 void display_port_forget_panel(void);
 
+/* Draw the live tilt ball in the bottom-right corner of a MONO frame.
+ * roll_cdeg/pitch_cdeg are relative to the current zero; dir is IMU_DIR_*.
+ * The buffer stays caller-owned; this only writes pixels. */
+void board_draw_tilt_ball(uint8_t *mono, int roll_cdeg, int pitch_cdeg, int dir);
+
 #ifdef __cplusplus
 }
 #endif

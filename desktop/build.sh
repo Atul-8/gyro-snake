@@ -18,6 +18,9 @@ HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$HERE/.." && pwd)"
 CORE_DIR="$ROOT/firmware/components/game_core"
 CORE_SRC="$CORE_DIR/src"
+BALL_DIR="$ROOT/firmware/components/board_port"
+IMU_DIR="$ROOT/firmware/components/imu_core"
+STUB_DIR="$ROOT/host/preview"
 BUILD_DIR="$HERE/build"
 OUT="$BUILD_DIR/gyro_snake.dll"
 
@@ -40,11 +43,14 @@ if [ ! -f "$HERE/sim_api.c" ]; then
     exit 2
 fi
 
-# One link step: every core translation unit plus the DLL boundary.
-echo "[cc] core  ${#core_sources[@]} file(s) + sim_api.c -> $OUT"
+# One link step: every core translation unit, the tilt-ball renderer shared
+# with the firmware, and the DLL boundary. host/preview supplies the esp_err_t
+# stand-in that board_port.h needs on a host build.
+echo "[cc] core  ${#core_sources[@]} file(s) + tilt_ball.c + sim_api.c -> $OUT"
 # shellcheck disable=SC2086
-"$CC" $CFLAGS $LDFLAGS -I"$CORE_DIR/include" \
-    "${core_sources[@]}" "$HERE/sim_api.c" -o "$OUT"
+"$CC" $CFLAGS $LDFLAGS \
+    -I"$CORE_DIR/include" -I"$IMU_DIR/include" -I"$BALL_DIR/include" -I"$STUB_DIR" \
+    "${core_sources[@]}" "$BALL_DIR/src/tilt_ball.c" "$HERE/sim_api.c" -o "$OUT"
 
 if [ ! -s "$OUT" ]; then
     echo "build.sh: error: $OUT was not produced" >&2

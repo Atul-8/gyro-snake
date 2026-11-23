@@ -66,6 +66,11 @@ PANEL_H = 600
 PANEL_X = 80
 PANEL_Y = 62
 
+# 核心画面右下角的倾斜球（与固件 tilt_ball.c 的 BALL_CX/CY/R 对应）。
+BALL_CORE_CX = 450
+BALL_CORE_CY = 770
+BALL_CORE_HIT_R = 34
+
 # 深炭机身 + 纸色屏幕 + 绿色强调（与固件墨水屏的视觉语言一致）。
 SHELL = "#1b1a17"
 SHELL_DECK = "#211f1a"
@@ -191,7 +196,13 @@ LANG = {
             STATE_DEAD: "死亡",
             STATE_GAME_OVER: "结束",
         },
-        "sim_note": "刷新时序为模拟值 · 虚拟倾斜不是真机 IMU",
+        "hint_title": "点击屏幕或按 OK 开始 · 自动校准 3 秒",
+        "hint_calibrating": "校准中 · 请保持倾斜盘居中",
+        "hint_play": "点击屏幕或按 OK 暂停",
+        "hint_pause": "点击屏幕或按 OK 继续",
+        "hint_dead": "点击屏幕或按 OK 继续",
+        "hint_game_over": "点击屏幕或按 OK 回标题 / 重开",
+        "sim_note_short": "虚拟倾斜 · 模拟时序",
         "no_frame": "还没有画面",
         "shot_saved": "截图已保存",
         "shot_failed": "截图失败",
@@ -231,7 +242,13 @@ LANG = {
             STATE_DEAD: "DEAD",
             STATE_GAME_OVER: "GAME OVER",
         },
-        "sim_note": "refresh timings are simulated · tilt is a virtual IMU",
+        "hint_title": "TAP SCREEN OR PRESS OK · AUTO-CALIBRATES 3S",
+        "hint_calibrating": "CALIBRATING · KEEP THE TILT PUCK CENTERED",
+        "hint_play": "TAP SCREEN OR PRESS OK TO PAUSE",
+        "hint_pause": "TAP SCREEN OR PRESS OK TO RESUME",
+        "hint_dead": "TAP SCREEN OR PRESS OK TO CONTINUE",
+        "hint_game_over": "TAP SCREEN OR PRESS OK: TITLE / RESTART",
+        "sim_note_short": "SIMULATED TILT · SIMULATED TIMING",
         "no_frame": "NO FRAME YET",
         "shot_saved": "SHOT SAVED",
         "shot_failed": "SHOT FAILED",
@@ -272,10 +289,11 @@ def _unique_path(path: Path) -> Path:
 def _resolve_out(value, default: Path) -> Path:
     """解析 --out。
 
-    任务书里的示例是 ``--out desktop/out/selftest``，既可能从项目根
-    （gyro-snake/）执行，也可能从仓库根（codecraft/）执行。若相对路径
-    以 ``desktop`` 开头，一律钉到 gyro-snake/desktop 下，因而两种 cwd
-    都得到 gyro-snake/desktop/out/...；其他相对路径按 cwd 常规解析。
+    任务书里的示例是 ``--out desktop/out/...`` 或
+    ``--out gyro-snake/desktop/out/...``，既可能从项目根
+    （gyro-snake/）执行，也可能从仓库根（codecraft/）执行。这两种
+    前缀都钉到 gyro-snake/desktop 下，因而任意 cwd 都得到
+    gyro-snake/desktop/out/...；其他相对路径按 cwd 常规解析。
     """
     if value is None:
         return default
@@ -285,6 +303,10 @@ def _resolve_out(value, default: Path) -> Path:
     parts = p.parts
     if parts and parts[0].lower() == "desktop":
         rest = Path(*parts[1:]) if len(parts) > 1 else Path()
+        return (BASE_DIR / rest).resolve()
+    if (len(parts) >= 2 and parts[0].lower() == "gyro-snake"
+            and parts[1].lower() == "desktop"):
+        rest = Path(*parts[2:]) if len(parts) > 2 else Path()
         return (BASE_DIR / rest).resolve()
     return (Path.cwd() / p).resolve()
 
@@ -378,6 +400,7 @@ class SnakeDLL:
         ("gs_set_high", None, [ctypes.c_uint16]),
         ("gs_mono", ctypes.c_void_p, []),
         ("gs_gray4", ctypes.c_void_p, []),
+        ("gs_draw_ball", None, [ctypes.c_int, ctypes.c_int, ctypes.c_int]),
         ("gs_frame", ctypes.c_int, []),
         ("gs_state", ctypes.c_int, []),
         ("gs_card", ctypes.c_int, []),
@@ -559,6 +582,10 @@ class SnakeDLL:
 
     def mono_bytes(self) -> bytes:
         return self._copy(self.lib.gs_mono(), MONO_FRAME_BYTES, "mono")
+
+    def draw_ball(self, roll_cdeg: int, pitch_cdeg: int, direction: int) -> None:
+        """Stamp the on-device tilt instrument into the pending MONO frame."""
+        self.lib.gs_draw_ball(int(roll_cdeg), int(pitch_cdeg), int(direction))
 
     def gray4_bytes(self) -> bytes:
         return self._copy(self.lib.gs_gray4(), GRAY4_PAGE_BYTES, "gray4")
@@ -1088,6 +1115,7 @@ class GameUI:
         self._status_line1 = None
         self._status_line2 = None
         self._footer_item = None
+        self._footer_note = None
         self._caption_mode = None
         self._tilt_puck = None
         self._tilt_shadow = None
@@ -1135,6 +1163,7 @@ class GameUI:
         self._status_line1 = None
         self._status_line2 = None
         self._footer_item = None
+        self._footer_note = None
         self._caption_mode = None
         self._tilt_puck = None
         self._tilt_shadow = None
@@ -1264,9 +1293,13 @@ class GameUI:
             20, 960, anchor="nw", text="", font=self._ui_font(-8),
             fill=MUTED,
         )
-        self._tool_default = L["sim_note"]
+        self._tool_default = self._hint_text()
         self._footer_item = c.create_text(
             20, 976, anchor="nw", text=self._tool_default,
+            font=self._ui_font(-7), fill=FAINT,
+        )
+        self._footer_note = c.create_text(
+            WIN_W - 20, 976, anchor="ne", text=L["sim_note_short"],
             font=self._ui_font(-7), fill=FAINT,
         )
 
@@ -1521,6 +1554,17 @@ class GameUI:
     def _in_disk(self, x: int, y: int) -> bool:
         return math.hypot(x - TILT_CX, y - TILT_CY) <= TILT_R + 6
 
+    def _in_screen(self, x: int, y: int) -> bool:
+        """480x800 面板在窗口中的 0.75 缩放区域（360x600）。"""
+        return (PANEL_X <= x < PANEL_X + PANEL_W and
+                PANEL_Y <= y < PANEL_Y + PANEL_H)
+
+    def _in_ball(self, x: int, y: int) -> bool:
+        """核心画面右下角的倾斜球，换算回 480x800 坐标判断。"""
+        cx = (x - PANEL_X) / PANEL_SCALE
+        cy = (y - PANEL_Y) / PANEL_SCALE
+        return math.hypot(cx - BALL_CORE_CX, cy - BALL_CORE_CY) <= BALL_CORE_HIT_R
+
     def _drag_to(self, x: int, y: int):
         self._set_tilt_vec(x - TILT_CX, y - TILT_CY)
 
@@ -1530,6 +1574,16 @@ class GameUI:
             self._take_over_demo()
             self.dragging = True
             self._drag_to(event.x, event.y)
+            return
+        if self._in_screen(event.x, event.y):
+            # 右下角倾斜球：点击等同固件的 DOWN 键（把当前姿态设为零点）。
+            self._take_over_demo()
+            if (self._in_ball(event.x, event.y)
+                    and self.lib.state() in (STATE_PLAY, STATE_PAUSE)):
+                self.center_tilt()
+                return
+            # TAP TO START / OR PRESS OK: 屏幕点击等同 OK/START。
+            self.primary_action()
 
     def _on_canvas_motion(self, event):
         if self.dragging:
@@ -1577,6 +1631,29 @@ class GameUI:
             name += f" {int(st.get('calib', 0)):3d}%"
         return name
 
+    def _hint_text(self, state: int | None = None) -> str:
+        if state is None:
+            state = self.lib.state() if self.startup_ok else STATE_TITLE
+        key = {
+            STATE_TITLE: "hint_title",
+            STATE_CALIBRATING: "hint_calibrating",
+            STATE_PLAY: "hint_play",
+            STATE_PAUSE: "hint_pause",
+            STATE_DEAD: "hint_dead",
+            STATE_GAME_OVER: "hint_game_over",
+        }.get(int(state), "hint_title")
+        return self.L.get(key, self.L["hint_title"])
+
+    def _sync_hint(self, state: int | None = None):
+        self._tool_default = self._hint_text(state)
+        if self._tool_after_id is None and self._footer_item is not None:
+            try:
+                self._canvas.itemconfigure(
+                    self._footer_item, text=self._tool_default, fill=FAINT
+                )
+            except Exception:
+                pass
+
     def _update_status(self, st: dict | None = None):
         if self._canvas is None:
             return
@@ -1609,6 +1686,7 @@ class GameUI:
             self._canvas.itemconfigure(self._caption_mode, text=self.last_refresh_mode)
         self._update_tilt_items()
         self._refresh_buttons_if_needed()
+        self._sync_hint(int(st.get("state", STATE_TITLE)))
 
     def _set_tool_status(self, text: str):
         if self._footer_item is None:
@@ -1703,7 +1781,11 @@ class GameUI:
             self._fatal(f"startup: {exc}")
 
     def _instant_play(self):
-        """窗口测试专用：跳过 3 秒校准动画，直接进入 PLAY。"""
+        """窗口测试 / --demo 专用：跳过 3 秒校准动画直接进入 PLAY。
+
+        这不是用户按 START 的路径；START（屏幕点击或主按钮）始终走
+        start_calibration() 的 3 秒模拟归零。
+        """
         self.lib.begin_calibration()
         if self.lib.dirty():
             self.lib.mark_refreshed(True)
@@ -1817,6 +1899,10 @@ class GameUI:
             return
 
         try:
+            if self.lib.frame_kind() == FRAME_MONO:
+                # Same instrument the device stamps before the panel refresh.
+                dx, dy = self.tilt_vec
+                self.lib.draw_ball(int(dx * 200), int(-dy * 200), self.tilt_dir)
             kind, buf = self.lib.frame_bytes()
             core_im = decode_mono(buf) if kind == FRAME_MONO else decode_gray4(buf)
             paper = panel_image(kind, core_im)
@@ -1892,14 +1978,9 @@ class GameUI:
 
         if self.restart_pending:
             if st["state"] == STATE_TITLE:
-                self.restart_pending = False
-                if st["calibrated"]:
-                    self.lib.start_play()
-                    self._after_core_tick()
-                else:
-                    self.calib_active = True
-                    self.calib_started = time.monotonic()
-                    self.lib.begin_calibration()
+                # Restart also goes through the 3 s calibration, never
+                # snake_start_play(), even if the previous run was calibrated.
+                self._enter_calibration()
             elif st["state"] == STATE_GAME_OVER:
                 self.pending_buttons |= BTN_OK
 
@@ -1959,14 +2040,10 @@ class GameUI:
         self._take_over_demo()
         st = self.lib.state()
         if st == STATE_TITLE:
-            if self.lib.calibrated():
-                self.lib.start_play()
-                self._after_core_tick()
-                self._update_status()
-                if self.lib.dirty():
-                    self._present()
-            else:
-                self.start_calibration()
+            # Device (and now desktop) calibrates on EVERY start, even when a
+            # bias from an earlier run is still in memory. Never call
+            # snake_start_play() here: it would skip the 3 s zeroing pass.
+            self.start_calibration()
             return
         if st == STATE_CALIBRATING:
             self._set_tool_status(self.L["calibrating_status"])
@@ -1975,17 +2052,14 @@ class GameUI:
             self.pending_buttons |= BTN_OK
             self._request_tick()
             return
-        # DEAD / GAME_OVER: one press gets back to a fresh run.
+        # DEAD / GAME_OVER: one press gets back to TITLE, then a fresh 3 s
+        # calibration (handled in _do_tick once the core reaches TITLE).
         self.restart_pending = True
         self.pending_buttons |= BTN_OK
         self._request_tick()
 
-    def start_calibration(self):
-        if not self.startup_ok:
-            return
-        self._take_over_demo()
-        if self.lib.state() == STATE_CALIBRATING and self.calib_active:
-            return
+    def _enter_calibration(self):
+        """Start the simulated 3 s zeroing pass (no timer scheduling here)."""
         self.calib_active = True
         self.calib_started = time.monotonic()
         self.pending_buttons = 0
@@ -1995,6 +2069,14 @@ class GameUI:
         self._update_tilt_items()
         self.lib.begin_calibration()
         self._update_status()
+
+    def start_calibration(self):
+        if not self.startup_ok:
+            return
+        self._take_over_demo()
+        if self.lib.state() == STATE_CALIBRATING and self.calib_active:
+            return
+        self._enter_calibration()
         self._request_tick()
 
     # ---- 最高分 ------------------------------------------------------

@@ -4,6 +4,7 @@ idf_component_register(
     REQUIRES
         board_port
         imu_port
+        touch_port
         bsp
         game_core
         imu_core
