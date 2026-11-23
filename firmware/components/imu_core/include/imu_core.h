@@ -143,12 +143,12 @@ void mahony_get_quat(const mahony_t *m, float *w, float *x, float *y, float *z);
  * ====================================================================== */
 
 typedef struct {
-    float deadzone_deg;   /* e.g. 12: below this, no direction          */
-    float rearm_deg;      /* e.g. 6: below this, unlock for a new turn  */
-    int stable_samples;   /* e.g. 3 consecutive samples to accept       */
-    int candidate;        /* -1 or 0..3                                 */
+    float deadzone_deg;   /* e.g. 8: below this magnitude, no direction      */
+    float rearm_deg;      /* boundary hysteresis (deg) + unlock threshold    */
+    int stable_samples;   /* consecutive samples to accept a new direction   */
+    int candidate;        /* -1 or 0..3                                      */
     int count;
-    int locked;           /* -1 or 0..3                                 */
+    int locked;           /* held direction, -1 or 0..3 (continuous)         */
     float neutral_roll_deg;
     float neutral_pitch_deg;
     bool swap_xy;
@@ -167,9 +167,16 @@ void tilt_set_axis(tilt_t *t, bool swap_xy, bool invert_roll, bool invert_pitch)
 void tilt_reset(tilt_t *t);
 
 /*
- * Update with the latest Mahony roll/pitch (degrees). Returns
- * IMU_DIR_NONE (-1) when the device is inside the deadzone or the reading is
- * not yet stable, otherwise 0..3. The core ignores 180-degree reversals.
+ * Update with the latest roll/pitch (degrees, screen frame). The tilt vector
+ * is split into four 45-degree sectors around the neutral pose: anything
+ * within +-45 deg of straight up reports UP, and likewise for the other
+ * directions, so a diagonal tilt still steers toward its dominant side.
+ * The direction follows the sensor in real time: changing sectors switches
+ * the direction without returning to center. deadzone_deg silences the
+ * center; rearm_deg widens the held sector (hysteresis) and unlocks below
+ * it; a new direction must hold stable_samples calls (with the previous
+ * direction still reported in the meantime). Returns IMU_DIR_NONE (-1) when
+ * near center; otherwise 0..3. The core ignores 180-degree reversals.
  */
 int8_t tilt_update(tilt_t *t, float roll_deg, float pitch_deg);
 

@@ -47,6 +47,12 @@ static int near_f(float a, float b, float tol)
         CHECK(tilt_update((t), (roll), (pitch)) == (want));                \
     } while (0)
 
+#define CHECK_DIR2(t, roll, pitch, want)                                   \
+    do {                                                                   \
+        CHECK(tilt_update((t), (roll), (pitch)) == IMU_DIR_NONE);          \
+        CHECK(tilt_update((t), (roll), (pitch)) == (want));                \
+    } while (0)
+
 static imu_sample_t sample(float ax, float ay, float az,
                            float gx, float gy, float gz)
 {
@@ -397,8 +403,12 @@ static void test_tilt_deadzone(void)
 }
 
 /* -------------------------------------------------------------------------
- * Tilt: 8 deg is inside the deadzone but not a re-arm; reversals before the
- * 6 deg re-arm are ignored.
+ * Tilt: 45-degree sectors, real-time switching and the re-arm margin.
+ *
+ * New model (2026-11-23): the tilt vector owns four +-45 deg sectors and the
+ * direction follows the sensor without re-centering. rearm_deg widens the
+ * held sector (hysteresis) and releases below it; stable_samples debounces a
+ * sector change while the previous direction stays reported.
  * ---------------------------------------------------------------------- */
 static void test_tilt_rearm(void)
 {
@@ -409,22 +419,57 @@ static void test_tilt_rearm(void)
 
     CHECK_DIR3(&t, 20.0f, 0.0f, IMU_DIR_RIGHT);
 
-    /* 8 deg: deadzone but above the 6 deg re-arm threshold. */
+    /* 8 deg: inside the hush zone (below deadzone, above re-arm). */
     CHECK(tilt_update(&t, 8.0f, 0.0f) == IMU_DIR_NONE);
 
-    /* A reversal without re-arming must not be accepted. */
-    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_NONE);
-    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_NONE);
-    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_NONE);
+    /* A reversal switches without re-centering; the held direction stays
+     * reported while the new sector debounces. */
+    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_RIGHT);
+    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_RIGHT);
+    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_LEFT);
+    CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_LEFT);
 
-    /* The accepted direction is still reported. */
+    /* ... and back, same story. */
+    CHECK(tilt_update(&t, 20.0f, 0.0f) == IMU_DIR_LEFT);
+    CHECK(tilt_update(&t, 20.0f, 0.0f) == IMU_DIR_LEFT);
     CHECK(tilt_update(&t, 20.0f, 0.0f) == IMU_DIR_RIGHT);
 
-    /* Below 6 deg the lock is released, and a new direction needs 3 samples. */
+    /* Below 6 deg the held direction is released; a fresh tilt then needs 3
+     * stable samples from scratch. */
     CHECK(tilt_update(&t, 5.0f, 0.0f) == IMU_DIR_NONE);
     CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_NONE);
     CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_NONE);
     CHECK(tilt_update(&t, -20.0f, 0.0f) == IMU_DIR_LEFT);
+}
+
+/* -------------------------------------------------------------------------
+ * Tilt: sector geometry. Anything within +-45 deg of straight up is UP; the
+ * held direction keeps 6 deg of boundary hysteresis.
+ * ---------------------------------------------------------------------- */
+static void test_tilt_sectors(void)
+{
+    tilt_t t;
+
+    tilt_init(&t, 4.0f, 6.0f, 2);
+    tilt_set_neutral(&t, 0.0f, 0.0f);
+
+    /* |dr| > |dp| is still UP while inside the up sector. */
+    tilt_reset(&t);
+    CHECK_DIR2(&t, 8.0f, 20.0f, IMU_DIR_UP);      /* ang ~ +21.8 deg */
+    tilt_reset(&t);
+    CHECK_DIR2(&t, -8.0f, 20.0f, IMU_DIR_UP);     /* ang ~ -21.8 deg */
+    tilt_reset(&t);
+    CHECK_DIR2(&t, 20.0f, 8.0f, IMU_DIR_RIGHT);   /* ang ~ +68.2 deg */
+    tilt_reset(&t);
+    CHECK_DIR2(&t, 10.0f, 10.0f, IMU_DIR_RIGHT);  /* ang = 45 deg boundary */
+
+    /* Boundary hysteresis: held RIGHT, the UP boundary moves down to 39 deg,
+     * so ~42 deg still reports RIGHT without re-centering. */
+    tilt_reset(&t);
+    CHECK_DIR2(&t, 20.0f, 0.0f, IMU_DIR_RIGHT);
+    CHECK(tilt_update(&t, 14.2f, 15.8f) == IMU_DIR_RIGHT); /* ang ~ 42 deg */
+    CHECK(tilt_update(&t, 11.5f, 16.4f) == IMU_DIR_RIGHT); /* ang ~ 35 deg: outside the widened sector, debouncing */
+    CHECK(tilt_update(&t, 11.5f, 16.4f) == IMU_DIR_UP);
 }
 
 /* -------------------------------------------------------------------------
@@ -492,6 +537,7 @@ int main(void)
     test_tilt_basic();
     test_tilt_deadzone();
     test_tilt_rearm();
+    test_tilt_sectors();
     test_tilt_neutral_and_axis();
     test_names();
 
