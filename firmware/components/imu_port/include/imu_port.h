@@ -6,7 +6,7 @@
  * A single 100 Hz task owns the sensor and the IMU algorithms:
  *   normal mode:  raw -> subtract gyro bias only -> mahony_update ->
  *                 (roll,pitch) - neutral -> tilt_update -> atomic direction
- *   calibration:  300 samples at 100 Hz -> imu_calib_feed(raw, raw) +
+ *   calibration:  400 samples at 100 Hz -> imu_calib_feed(raw, raw) +
  *                 mahony_update(raw); on completion imu_calib_result()
  *                 (gyro bias), mahony_get_angles() (neutral pose), NVS save,
  *                 then the result is published to the game task.
@@ -70,6 +70,36 @@ void imu_port_request_calibration(void);
  * for PLAY: hold the device the way you are actually playing, press UP, and
  * the tilt baseline is re-zeroed without restarting the run. */
 void imu_port_request_rezero(void);
+
+/* Runtime axis mapping (the compile-time IMU_PORT_AXIS_* defaults can be
+ * overridden live from the serial console while the four directions are
+ * checked on hardware). Applied by the IMU task at its next sample. */
+void imu_port_set_axis(bool swap_xy, bool invert_roll, bool invert_pitch);
+
+/* Runtime deadzone / re-arm / stable-sample count. Non-positive values keep
+ * the current setting. */
+void imu_port_set_tilt_params(float deadzone_deg, float rearm_deg,
+                              int stable_samples);
+
+/* Telemetry rate in Hz (1..50, default 10). Values outside the range are
+ * clamped. */
+void imu_port_set_telemetry_hz(int hz);
+
+/* Snapshot of the runtime configuration, for the serial console. */
+typedef struct {
+    bool swap_xy;
+    bool invert_roll;
+    bool invert_pitch;
+    float deadzone_deg;
+    float rearm_deg;
+    int stable_samples;
+    int telemetry_hz;
+    float neutral_roll;
+    float neutral_pitch;
+    bool ready;
+} imu_port_config_t;
+
+void imu_port_get_config(imu_port_config_t *out);
 
 /* 0..100 progress of the current calibration window. */
 uint8_t imu_port_calib_progress(void);

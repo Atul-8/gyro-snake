@@ -129,6 +129,24 @@ python gyro-snake/desktop/play.py --speed 4 --timing turbo --lang en
 | **SHOT** | 截取整个窗口到 `desktop/out/screenshot_*.png` |
 | **REC / STOP REC** | 录制面板帧（360x600 PNG）并在停止时合成 `record.gif` + `record.json` |
 
+### 5.1.1 IMU 联调页（`desktop/imu_debug.py`）
+
+四方向标定工具，串口**双向**：读固件遥测，同时发 `$` 命令（`console.c`，
+UART0），改轴映射/死区/遥测率**不用重新烧录**。
+
+```bash
+python desktop/imu_debug.py --port COM65
+```
+
+流程：拿起设备 → 【置零】→ 每个方向倾斜保持 1 秒点【采 UP/RIGHT/DOWN/LEFT】
+→ 【② 分析】自动对 8 种轴映射打分 → 【应用建议】→ 四方向箭头都对上后，
+把映射写回 `imu_port.h` 的 `IMU_PORT_AXIS_*`。
+
+- 左侧罗盘：绿点 = 固件报告的相对倾斜（外圈 20°），蓝圈 = 纯加速计角度；
+  两者长期不重合说明 Mahony 滤波有问题。
+- 右侧读数含锁存方向（LOCK）与 |加速度|：倾斜时 |a|≈1 g，纯平移晃动会让它波动。
+- 底部日志区显示固件的 `CMD ... ok/err` 与关键启动行。
+
 ### 5.2 虚拟倾斜盘
 
 - 鼠标在圆盘内按下/拖动：puck 跟随，角度决定 UP/RIGHT/DOWN/LEFT。
