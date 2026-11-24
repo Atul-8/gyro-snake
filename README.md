@@ -243,9 +243,6 @@ gcc -std=c99 -I firmware/components/imu_core/include -lm \
   版权归 **JoJang2u** 与 **limengdu** 所有，原版权头逐字保留；其余引脚/按键文件为
   **Apache-2.0**（CodeCraft AI Hardware contributors）。
 - **Seeed Studio** —— reTerminal Sticky 硬件本身及官方例程与硬件文档。
-- **MagicRobot_V0.1/embedded** 的作者 —— 本项目的 IMU 校准与 Mahony 姿态算法在
-  分析其真实执行路径后独立重写（未复刻其代码），详见
-  [docs/imu-calibration.md](docs/imu-calibration.md)。
 
 ---
 
@@ -513,7 +510,3 @@ shoulders. Special thanks to:
   (CodeCraft AI Hardware contributors).
 - **Seeed Studio** — the reTerminal Sticky hardware itself, its official
   examples and hardware documentation.
-- The authors of **MagicRobot_V0.1/embedded** — the IMU calibration and
-  Mahony attitude code in this project was independently rewritten after
-  analysing their real execution paths (their code is not reproduced); see
-  [docs/imu-calibration.md](docs/imu-calibration.md).

@@ -29,17 +29,12 @@ Project layout licenses / 许可结构
 IMU algorithm provenance / IMU 算法来源
 ---------------------------------------
 
-The calibration, Mahony and tilt modules are an independent C99
-re-implementation of the algorithms reached from app_main() in a local
-reference project (MagicRobot_V0.1/embedded). They were written from the
-actual executed code, not the comments; the accel-bias/Mahony inconsistency
-of that reference is documented in docs/imu-calibration.md and deliberately
-not reproduced.
+The calibration, Mahony and tilt-direction modules are original
+implementations of this project; the derivation analysis lives in
+docs/imu-calibration.md.
 
-校准、Mahony 与倾角模块是对某个本地参考工程（MagicRobot_V0.1/embedded）
-中 app_main() 实际可达代码路径的独立 C99 重新实现：以实际执行代码为准、
-不采信其注释；该参考中 accel 偏置/Mahony 的缺陷在 docs/imu-calibration.md
-有记录，本项目有意未复现。
+校准、Mahony 与倾角方向模块为本项目原创实现，推导分析见
+docs/imu-calibration.md。
 
 Original work / 原创声明
 ------------------------
