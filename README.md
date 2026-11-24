@@ -181,6 +181,9 @@ gyro-snake/
 │  ├─ imu_monitor.py  .bat      独立的实时姿态监视器（读串口遥测）
 │  └─ build.sh                  一键编译游戏 DLL（gcc）
 ├─ tests/                       纯 C99 核心主机单测（701 项断言）
+├─ host/preview/
+│  ├─ esp_err.h                 esp_err_t 的主机替身（桌面 DLL 在 PC 上编译 tilt_ball.c 必需）
+│  └─ play_preview.c            离线帧预览：真实核心渲染一帧 + 倾斜球 → PGM（不烧录即可检查版式）
 ├─ docs/                        需求 / 架构 / IMU 分析 / 硬件笔记 / 测试记录
 ├─ LICENSE（MIT） NOTICE（许可明细） AGENTS.md（AI 协作工程规则）
 ```
@@ -440,6 +443,9 @@ gyro-snake/
 │  ├─ imu_monitor.py  .bat      standalone live attitude monitor (serial telemetry)
 │  └─ build.sh                  one-shot game DLL build (gcc)
 ├─ tests/                       host unit tests for the C99 cores (701 assertions)
+├─ host/preview/
+│  ├─ esp_err.h                 host stand-in for esp_err_t (required to build tilt_ball.c into the desktop DLL)
+│  └─ play_preview.c            offline frame preview: renders a real play frame + tilt ball to PGM, no flashing needed
 ├─ docs/                        requirements / architecture / IMU analysis / notes / test log
 ├─ LICENSE (MIT) NOTICE (license details) AGENTS.md (AI-collaboration engineering rules)
 ```
