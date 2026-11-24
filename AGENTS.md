@@ -11,7 +11,7 @@
   `python desktop/play.py --window-test 3 ...` must pass before a release.
 - **Firmware via the VM.** Do not install ESP-IDF on Windows. Use
   `<ai_global>/meta/scripts/espidf-vm/vm-stage-build.sh` as in README.
-- **Do not trust comments in the MagicRobot reference.** The real call chain and the
+- **Do not trust comments in the reference IMU code.** The real call chain and the
   accel-bias/Mahony inconsistency are documented in `docs/imu-calibration.md`.
   Do not feed a gravity-subtracted accel bias to Mahony.
 - **IMU axis is compile-time.** `IMU_PORT_AXIS_SWAP_XY / INVERT_ROLL / INVERT_PITCH`

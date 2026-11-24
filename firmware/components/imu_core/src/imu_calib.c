@@ -5,8 +5,9 @@
  * SPDX-License-Identifier: MIT
  *
  * Reference code path (the code actually reached, not its comments):
- *   MagicRobot_V0.1/embedded/src/core/calibration/imu_calib.c
+ *   the local reference project's calibration/imu_calib.c,
  * called from app_main() -> app_imu.c -> poll_calib() in app_stream.c.
+ * The full analysis lives in docs/imu-calibration.md.
  *
  * Deliberate differences from that reference:
  *   - imu_calib_result() reports the mean RAW accelerometer vector and never

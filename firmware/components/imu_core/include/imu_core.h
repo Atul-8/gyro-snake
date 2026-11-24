@@ -10,12 +10,12 @@
  * --------------------
  * The calibration and Mahony code is a clean re-implementation of the
  * *actual* code paths reached from app_main() in the local reference
- * project MagicRobot_V0.1/embedded
+ * project analysed in docs/imu-calibration.md
  * (src/core/calibration/imu_calib.c, src/core/attitude/mahony.c,
  *  apps/espidf/main/runtime/app_stream.c), not of its comments.
  *
  * One deliberate difference from that reference:
- *   MagicRobot's imu_calib_result() subtracts sign*1g from the gravity axis
+ *   the reference's imu_calib_result() subtracts sign*1g from the gravity axis
  *   and stores that in the accelerometer bias. Its do_sample() then subtracts
  *   the same bias before mahony_update(), so after a calibration the accel
  *   input to Mahony is almost zero and mahony_update() returns early

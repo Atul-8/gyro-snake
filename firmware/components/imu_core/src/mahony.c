@@ -4,9 +4,9 @@
  * Copyright (c) 2026 GYRO SNAKE contributors.
  * SPDX-License-Identifier: MIT
  *
- * Clean re-implementation of the code actually reached in
- *   MagicRobot_V0.1/embedded/src/core/attitude/mahony.c
- * (HAL_USE_FPU == 1 path). The algorithm is unchanged:
+ * Independent implementation of the algorithm as reached in the local
+ * reference project's attitude/mahony.c (the full analysis lives in
+ * docs/imu-calibration.md). The algorithm is unchanged:
  *
  *   1. normalize the measured acceleration (return early below 1e-6)
  *   2. estimate gravity in body coordinates from the quaternion
