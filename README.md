@@ -161,6 +161,20 @@ gcc -std=c99 -I firmware/components/imu_core/include -lm \
   按上游许可逐文件保留（MIT / Apache-2.0），明细见 [NOTICE](NOTICE)。
 - 贪吃蛇为通用玩法；美术、音效、文档均为原创，不含任何第三方游戏素材。
 
+## 致谢
+
+本项目的电子墨水驱动与板级引脚定义站在别人的肩膀上，特别感谢：
+
+- **[CodeCraft AI Hardware](https://github.com/Seeed-Solution/codecraft-ai-hardware)**
+  —— `firmware/components/bsp/` 中的电子墨水/按键驱动与引脚表派生自该项目的
+  reTerminal Sticky BSP。其中 `bsp_epd.c`（SSD1677 电子墨水驱动）为 **MIT** 许可，
+  版权归 **JoJang2u** 与 **limengdu** 所有，原版权头逐字保留；其余引脚/按键文件为
+  **Apache-2.0**（CodeCraft AI Hardware contributors）。
+- **Seeed Studio** —— reTerminal Sticky 硬件本身及官方例程与硬件文档。
+- **MagicRobot_V0.1/embedded** 的作者 —— 本项目的 IMU 校准与 Mahony 姿态算法在
+  分析其真实执行路径后独立重写（未复刻其代码），详见
+  [docs/imu-calibration.md](docs/imu-calibration.md)。
+
 ---
 
 <a id="english"></a>
@@ -338,3 +352,22 @@ gcc -std=c99 -I firmware/components/imu_core/include -lm \
   (MIT / Apache-2.0) — details in [NOTICE](NOTICE).
 - Snake is a generic game genre; the art, sounds and documentation are
   original. No third-party game assets are used.
+
+## Acknowledgements
+
+The e-paper driver and the board pin definitions stand on other people's
+shoulders. Special thanks to:
+
+- **[CodeCraft AI Hardware](https://github.com/Seeed-Solution/codecraft-ai-hardware)**
+  — the e-paper / key drivers and the pin table under
+  `firmware/components/bsp/` are derived from their reTerminal Sticky BSP.
+  `bsp_epd.c` (the SSD1677 e-paper driver) is **MIT**-licensed, copyright
+  **JoJang2u** and **limengdu**, with the original headers preserved
+  verbatim; the remaining pin/button files are **Apache-2.0**
+  (CodeCraft AI Hardware contributors).
+- **Seeed Studio** — the reTerminal Sticky hardware itself, its official
+  examples and hardware documentation.
+- The authors of **MagicRobot_V0.1/embedded** — the IMU calibration and
+  Mahony attitude code in this project was independently rewritten after
+  analysing their real execution paths (their code is not reproduced); see
+  [docs/imu-calibration.md](docs/imu-calibration.md).
