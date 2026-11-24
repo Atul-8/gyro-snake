@@ -2,7 +2,7 @@
  * GYRO SNAKE — deterministic internal PRNG (xorshift32).
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * The core never calls rand()/random()/time(): food placement is a pure
  * function of the seed handed to snake_init() and of the input sequence, so a

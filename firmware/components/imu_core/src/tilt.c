@@ -2,7 +2,7 @@
  * GYRO SNAKE — tilt angles to four steering directions.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Pipeline:
  *   effective_roll  = roll  - neutral_roll

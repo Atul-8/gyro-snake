@@ -2,7 +2,7 @@
  * GYRO SNAKE — 5x7 dot-matrix font.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * The core keeps its own tiny font so the host build, the simulator and the
  * firmware all produce exactly the same pixels: no glyph comes from a host

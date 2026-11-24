@@ -2,7 +2,7 @@
  * GYRO SNAKE — host unit tests.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Build/run (from the repository root):
  *   gcc -std=c99 -O2 -Wall -Wextra \

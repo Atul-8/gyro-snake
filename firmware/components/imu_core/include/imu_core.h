@@ -2,7 +2,7 @@
  * GYRO SNAKE — portable IMU calibration, Mahony attitude and tilt direction.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Plain C99 + <math.h>. No ESP-IDF, no I2C, no malloc, no wall clock.
  *

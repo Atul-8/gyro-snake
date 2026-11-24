@@ -1,27 +1,50 @@
 GYRO SNAKE
 Copyright (c) 2026 GYRO SNAKE contributors
-SPDX-License-Identifier: Apache-2.0
+License: MIT (see LICENSE) / 许可证：MIT（见 LICENSE）
 
-Upstream board support
-----------------------
-The files under firmware/components/bsp/ are derived from the CodeCraft AI
-Hardware reTerminal Sticky BSP:
+Project layout licenses / 许可结构
+----------------------------------
 
-  Copyright (c) 2026 CodeCraft AI Hardware contributors
-  SPDX-License-Identifier: Apache-2.0
+* All original work in this repository — the snake game core, renderer,
+  font, IMU calibration/Mahony/tilt modules, the ESP-IDF port layers, the
+  desktop simulator, the calibration tool and the documentation — is
+  licensed under the MIT License found in LICENSE.
 
-The original copyright headers are preserved in those files.
+  本仓库中的全部原创内容——贪吃蛇核心、渲染、字体、IMU 校准/Mahony/倾角
+  模块、ESP-IDF 移植层、桌面模拟器、联调工具与文档——均按 LICENSE 中的
+  MIT 许可证授权。
 
-IMU algorithm reference
------------------------
+* The files under `firmware/components/bsp/` are derived from the CodeCraft
+  AI Hardware reTerminal Sticky BSP and keep their upstream licenses, with
+  the original copyright headers preserved in each file:
+
+    - `bsp/src/bsp_epd.c`: MIT, Copyright (c) 2026 JoJang2u, limengdu
+    - `bsp/include/bsp_epd.h`, `bsp/include/bsp_button.h`,
+      `bsp/include/bsp_pins.h`, `bsp/src/bsp_button.c`:
+      Apache-2.0, Copyright (c) 2026 CodeCraft AI Hardware contributors
+
+  `firmware/components/bsp/` 内的文件派生自 CodeCraft AI Hardware 的
+  reTerminal Sticky BSP，按上游许可保留，原版权头逐文件保留在文件内。
+
+IMU algorithm provenance / IMU 算法来源
+---------------------------------------
+
 The calibration, Mahony and tilt modules are an independent C99
-re-implementation of the algorithms reached from app_main() in
-MagicRobot_V0.1/embedded. They were written from the actual executed code
-(not the comments); the accel-bias/Mahony inconsistency of that reference is
-documented in docs/imu-calibration.md and deliberately not reproduced.
+re-implementation of the algorithms reached from app_main() in a local
+reference project (MagicRobot_V0.1/embedded). They were written from the
+actual executed code, not the comments; the accel-bias/Mahony inconsistency
+of that reference is documented in docs/imu-calibration.md and deliberately
+not reproduced.
 
-Original work
--------------
-The snake game core, renderer, font, desktop simulator, firmware port and
-documentation are original work. Snake is a generic game genre; this project
-contains no third-party characters, sprites or music.
+校准、Mahony 与倾角模块是对某个本地参考工程（MagicRobot_V0.1/embedded）
+中 app_main() 实际可达代码路径的独立 C99 重新实现：以实际执行代码为准、
+不采信其注释；该参考中 accel 偏置/Mahony 的缺陷在 docs/imu-calibration.md
+有记录，本项目有意未复现。
+
+Original work / 原创声明
+------------------------
+
+Snake is a generic game genre. All art, sounds and documentation here are
+original; this project contains no third-party characters, sprites or
+music. / Snake 属于通用游戏类型；本项目美术、音效、文档均为原创，不含任何
+第三方角色、素材或音乐。

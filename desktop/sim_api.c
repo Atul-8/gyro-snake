@@ -2,7 +2,7 @@
  * GYRO SNAKE - desktop simulator DLL boundary.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Thin, ctypes-friendly wrapper around the frozen game_core API (snake.h).
  * The core owns no memory and is fully deterministic; this file only owns

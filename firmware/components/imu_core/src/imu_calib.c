@@ -2,7 +2,7 @@
  * GYRO SNAKE — static IMU calibration (mean gyro bias + gravity axis).
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Reference code path (the code actually reached, not its comments):
  *   MagicRobot_V0.1/embedded/src/core/calibration/imu_calib.c

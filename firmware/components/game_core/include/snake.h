@@ -2,7 +2,7 @@
  * GYRO SNAKE — portable game core, public API (FROZEN).
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * This header is the only contract between the game core, the ESP-IDF port,
  * the host simulator and the desktop GUI. It is plain C99 and includes only

@@ -2,7 +2,7 @@
  * GYRO SNAKE — host tests for the portable IMU core.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Build with gcc (C99, -lm):
  *   gcc -std=c99 -O2 -Wall -Wextra \

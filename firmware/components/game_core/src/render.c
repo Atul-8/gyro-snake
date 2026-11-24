@@ -2,7 +2,7 @@
  * GYRO SNAKE — framebuffer painter.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Everything here is pure pixel pushing into caller-owned buffers:
  *   mono   480x800, 1 bpp, 60 B/row, MSB leftmost, 1 = white, 0 = black.

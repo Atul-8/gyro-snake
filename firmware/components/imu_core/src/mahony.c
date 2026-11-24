@@ -2,7 +2,7 @@
  * GYRO SNAKE — Mahony attitude filter, float implementation.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Clean re-implementation of the code actually reached in
  *   MagicRobot_V0.1/embedded/src/core/attitude/mahony.c

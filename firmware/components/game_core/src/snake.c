@@ -2,7 +2,7 @@
  * GYRO SNAKE — portable game core.
  *
  * Copyright (c) 2026 GYRO SNAKE contributors.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Implements the frozen contract in snake.h. The whole game state lives inside
  * the caller-owned snake_t union; no allocation, no I/O, no wall clock and no

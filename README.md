@@ -4,10 +4,20 @@
 跑在 Seeed **reTerminal Sticky** 开发板上：ESP32-S3 + 3.97" 480×800 电子墨水屏 +
 六轴陀螺仪 + 电容触摸 + 蜂鸣器。没有硬件也可以先在 Windows 桌面模拟器里玩完整游戏。
 
-> A gyro-steered Snake game for the Seeed reTerminal Sticky e-paper board,
-> with a full Windows desktop simulator when you don't have the hardware.
+**Tilt the whole screen like a steering wheel to steer a snake.** Runs on the
+Seeed **reTerminal Sticky** board (ESP32-S3 + 3.97" 480×800 e-paper + 6-axis IMU +
+capacitive touch + buzzer). No hardware? Play the full game in the Windows desktop
+simulator first.
+
+简体中文 ｜ [English](#english)
 
 ![GYRO SNAKE](docs/screenshot.png)
+
+- [功能一览](#功能一览)
+- [快速开始](#快速开始)
+- [怎么玩](#怎么玩)
+- [调参与联调](#调参与联调可选)
+- [English](#english)
 
 ## 功能一览
 
@@ -146,6 +156,185 @@ gcc -std=c99 -I firmware/components/imu_core/include -lm \
 
 ## 许可
 
-- 本项目代码：Apache-2.0（见 [LICENSE](LICENSE)）。
-- `firmware/components/bsp/` 中的板级驱动基于 Seeed 官方例程改写，Apache-2.0，版权与出处见 [NOTICE](NOTICE)。
+- 本项目原创代码与文档：**MIT**（见 [LICENSE](LICENSE)）。
+- `firmware/components/bsp/` 内的板级驱动派生自 CodeCraft AI Hardware 上游，
+  按上游许可逐文件保留（MIT / Apache-2.0），明细见 [NOTICE](NOTICE)。
 - 贪吃蛇为通用玩法；美术、音效、文档均为原创，不含任何第三方游戏素材。
+
+---
+
+<a id="english"></a>
+
+# English
+
+**Snake you steer by tilting the whole screen like a steering wheel.** It runs
+on the Seeed **reTerminal Sticky** board: ESP32-S3, a 3.97" 480×800 four-level
+grayscale e-paper panel, a 6-axis IMU, capacitive touch and a buzzer. Without
+hardware, play the complete game in the bundled Windows desktop simulator.
+
+## Features
+
+- **Tilt = direction.** The tilt vector is split into four ±45° sectors
+  (UP / RIGHT / DOWN / LEFT); diagonals follow the dominant side, and swinging
+  from "up" straight to "right" turns instantly — **no re-centering needed**.
+- **Automatic 4-second calibration at every start.** Hold the board the way
+  you are going to play; that pose becomes the zero point. Changed your grip
+  mid-game? Tap the **tilt ball** in the bottom-right corner (or press the
+  DOWN side key) and the current pose becomes the new zero immediately.
+- **A live tilt ball in the bottom-right corner of the screen**: outer ring =
+  20° full scale, inner ring = the 8° deadzone, the dot = current tilt, the
+  heavy tick = the direction currently detected. You can always see whether a
+  tilt registered.
+- **Native e-paper gameplay**: a 15×23 board, one step per displayed frame;
+  apples give +10 points and +1 segment; walls/yourself end the run; filling
+  the whole board wins. The high score survives reboots in NVS.
+- Original pixel art and buzzer jingles (eat, turn, start, calibrate, game
+  over). No third-party game assets anywhere.
+- **Desktop simulator**: a 1:1 Windows replica of the rules and artwork, with
+  a virtual tilt disc, a zh/EN interface, simulated e-paper refresh timing and
+  GIF recording.
+
+## Hardware
+
+| Item | Notes |
+| --- | --- |
+| Board | Seeed reTerminal Sticky (ESP32-S3, 16 MB flash, 8 MB PSRAM) |
+| Connection | USB-C cable (power + flashing + serial log) |
+| On-board peripherals | 480×800 grayscale e-paper (SSD1677), 6-axis IMU (LSM6DS3TR-C), capacitive touch (GT911), buzzer, AI/OK/UP/DOWN keys |
+
+## Quick start
+
+### Option A — no hardware: the Windows desktop simulator
+
+Requires 64-bit [MinGW-w64 gcc](https://winlibs.com/) and Python 3
+(`pip install pillow`):
+
+```bash
+git clone https://github.com/Atul-8/gyro-snake.git
+cd gyro-snake/desktop
+bash build.sh      # first build of the game-core DLL (gcc)
+python play.py     # or double-click play.bat on Windows; it builds the DLL if missing
+```
+
+- The top half is the 480×800 screen (scaled to 0.75); the bottom half holds
+  the virtual tilt disc and buttons.
+- Drag the disc or use the arrow keys to tilt; click the screen to
+  start/pause; **click the tilt ball in the bottom-right corner to re-zero**.
+- `EPD / FAST / TURBO` timing profiles emulate different e-paper refresh
+  speeds (default FAST; EPD matches the real panel best). `中/EN` switches the
+  UI language.
+
+### Option B — flash the real board
+
+Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/)
+**v6.1.1** (other 6.x versions unverified). The project ships its own
+`sdkconfig.defaults` (esp32s3 / 240 MHz / 16 MB flash / octal PSRAM / custom
+partition table) and needs no external component repositories:
+
+```bash
+git clone https://github.com/Atul-8/gyro-snake.git
+cd gyro-snake/firmware
+idf.py set-target esp32s3
+idf.py build
+idf.py -p <your-port> flash monitor      # usually COMx on Windows
+```
+
+After flashing you can unplug USB and play on battery (the firmware holds
+GPIO45/46 high at boot to keep the power rail alive; battery behaviour should
+be verified on your actual device). Serial baud rate: 115200.
+
+## How to play
+
+1. **Pick your grip** — hold the board exactly the way you intend to play.
+2. Tap the screen or press **AI/OK** to enter the 4-second calibration
+   (KEEP YOUR PLAY POSE): hold still. Afterwards you get a 3-second ready
+   window before the snake moves, so you can pre-tilt.
+3. **Tilt the board** to steer (real-time ±45° sectors); eat apples to grow;
+   walls and your own tail end the run.
+4. Changed your grip mid-run? **Tap the bottom-right tilt ball** or press
+   **DOWN** — the current pose becomes the new zero instantly.
+5. Pause/resume: tap the screen or press **AI/OK**; press **UP** in
+   PAUSE / GAME OVER to recalibrate.
+
+| Key / touch | Action |
+| --- | --- |
+| Tap screen / AI(OK) key | Start / pause / resume / back to title |
+| Tilt the board | UP / RIGHT / DOWN / LEFT (±45° sectors, real-time) |
+| Tap the tilt ball / DOWN key | Set the current pose as the zero point |
+| UP key (PAUSE / GAME OVER) | Recalibrate |
+
+## Tuning (optional)
+
+The firmware exposes a `$` command set on the serial port (115200) — **tune
+without reflashing**:
+
+```text
+$?            show current config     $zero   set the current pose as zero
+$map S R P    axis map (three 0/1)    $cal    recalibrate
+$dead N       deadzone (0.1° units)   $hz N   telemetry rate 1..50
+$rearm N      boundary hysteresis     $stable N  debounce samples
+```
+
+There is a graphical tuning page (needs `pip install pyserial`, board plugged
+into the PC):
+
+```bash
+python desktop/imu_debug.py --port COMx
+```
+
+Tilt four ways, capture one sample run each, and it scores all 8 axis-mapping
+combinations and sends the winner back to the firmware — re-calibrating a new
+board or a new enclosure takes about two minutes.
+
+## Repository layout
+
+```text
+firmware/                  ESP-IDF firmware (esp32s3)
+├─ components/game_core/   Snake core and renderer (plain C99, reusable)
+├─ components/imu_core/    Calibration / Mahony attitude / tilt sectors (plain C99)
+├─ components/bsp/         E-paper and key drivers (based on Seeed examples)
+├─ components/imu_port/    LSM6DS3TR-C driver + 100 Hz attitude task
+├─ components/board_port/  Display / keys / buzzer / NVS / serial console
+└─ main/                   Wiring and the game loop
+desktop/                   Windows simulator (Tkinter + game DLL) + IMU tuning page
+tests/                     Host unit tests for the pure-C cores (plain gcc)
+docs/                      Requirements, architecture, IMU analysis, notes, test log
+```
+
+## Test status
+
+- Host unit tests: 522 core + 195 IMU assertions, all passing. Any machine
+  with gcc can re-run them — no ESP-IDF needed:
+
+```bash
+gcc -std=c99 -I firmware/components/game_core/include \
+    firmware/components/game_core/src/*.c tests/test_snake.c -o t && ./t
+gcc -std=c99 -I firmware/components/imu_core/include -lm \
+    firmware/components/imu_core/src/*.c tests/test_imu.c -o i && ./i
+```
+
+- Desktop self-tests: `python desktop/play.py --selftest` and `--window-test`.
+- On hardware: direction mapping calibrated and full gameplay verified on a
+  reTerminal Sticky; battery endurance and touch-axis calibration are still
+  being polished — see `docs/test-results.md` (Chinese).
+
+## Documentation
+
+| Doc | Contents |
+| --- | --- |
+| [docs/requirements.md](docs/requirements.md) | Requirements vs. hardware capability (Chinese) |
+| [docs/architecture.md](docs/architecture.md) | Layered architecture and data flow (Chinese) |
+| [docs/imu-calibration.md](docs/imu-calibration.md) | Attitude algorithm and calibration analysis (Chinese) |
+| [docs/hardware-notes.md](docs/hardware-notes.md) | Board-level hardware notes (Chinese) |
+| [docs/test-results.md](docs/test-results.md) | Build / flash / on-device test log (Chinese) |
+| [desktop/README.md](desktop/README.md) | Simulator and tuning page in detail (Chinese) |
+
+## License
+
+- All original code and documentation in this repository: **MIT**
+  (see [LICENSE](LICENSE)).
+- The board drivers under `firmware/components/bsp/` are derived from the
+  CodeCraft AI Hardware upstream and keep their per-file upstream licenses
+  (MIT / Apache-2.0) — details in [NOTICE](NOTICE).
+- Snake is a generic game genre; the art, sounds and documentation are
+  original. No third-party game assets are used.
