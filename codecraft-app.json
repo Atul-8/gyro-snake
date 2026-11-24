@@ -1,0 +1,140 @@
+{
+  "manifest_version": 1,
+  "identity": {
+    "app_id": "13768",
+    "remote_type": "Global",
+    "org_id": "59205432491456",
+    "account": null,
+    "created_at": "2026-11-24T06:17:22Z"
+  },
+  "info": {
+    "app_name": "GYRO SNAKE",
+    "excerpt": "Steer a snake by tilting the board. Runs on the reTerminal Sticky e-paper: 4-second hold-to-calibrate, live tilt ball, tap-to-rezero, high score persists. 倾斜机身控制贪吃蛇：4 秒持机校准、实时倾斜球、点按归零、最高分掉电保存。",
+    "scene": "1",
+    "license": "MIT",
+    "author": "",
+    "allow_clone": 1,
+    "allow_commerce": 0,
+    "activity_id": null
+  },
+  "images": [
+    {
+      "path": "docs/screenshot.png",
+      "sha256": "60318f895b86687a04f708bad150f99c48755689b9d0504db620108cd5b5a40a",
+      "file_url": "https://sensecraft-statics.seeed.cc/refer/pic/1795500953623_HPbZqU_screenshot.png",
+      "role": "cover"
+    }
+  ],
+  "deployment": {
+    "blocks": [
+      {
+        "id": "intro_1",
+        "type": "paragraph",
+        "content": "GYRO SNAKE is a snake game you steer by tilting the board. It runs entirely on the reTerminal Sticky: the 480x800 e-paper shows the board, the built-in IMU reads your tilt, and the buzzer plays the sounds. The high score is saved on the device.",
+        "indent": 0
+      },
+      {
+        "id": "intro_1_zh",
+        "type": "paragraph",
+        "content": "GYRO SNAKE 是一个靠倾斜机身来控制方向的贪吃蛇游戏，完整运行在 reTerminal Sticky 上：480×800 电子墨水屏显示棋盘，内置 IMU 读取倾斜，蜂鸣器播放音效，最高分保存在设备上。",
+        "indent": 0
+      },
+      {
+        "id": "intro_2",
+        "type": "paragraph",
+        "content": "The live tilt ball in the bottom-right corner shows your current tilt against an 8-degree deadzone, and the heavy tick marks the direction the game currently steers. Tilting within plus/minus 45 degrees of any side turns the snake - diagonals follow the dominant side, and you never need to re-center between turns.",
+        "indent": 0
+      },
+      {
+        "id": "intro_2_zh",
+        "type": "paragraph",
+        "content": "右下角的实时倾斜球显示当前倾斜（内圈为 8° 死区），粗刻度指向当前判定方向。与任意方向偏差 ±45° 以内即判定为该方向，斜倾取主方向，转向之间无需回中。",
+        "indent": 0
+      },
+      {
+        "id": "step_1",
+        "type": "step",
+        "title": "Flash the firmware 刷入固件",
+        "content": "Flash the firmware 刷入固件",
+        "expanded": true,
+        "indent": 0
+      },
+      {
+        "id": "para_1",
+        "type": "paragraph",
+        "content": "Connect the reTerminal Sticky over USB-C and click Flash below. The image is the full flash (bootloader, partition table and game), so the board reboots straight into the title screen.",
+        "indent": 0
+      },
+      {
+        "id": "para_1_zh",
+        "type": "paragraph",
+        "content": "用 USB-C 连接 reTerminal Sticky，点击下方 Flash。镜像为完整刷写（bootloader + 分区表 + 游戏），完成后自动重启进入标题界面。",
+        "indent": 0
+      },
+      {
+        "id": "ff_1",
+        "type": "flash-firmware",
+        "config": {
+          "device_id": "100056818",
+          "device_type": "61",
+          "flash_mode": "bin",
+          "firmware_url": "https://sensecraft-statics.seeed.cc/refer/firmware/59205432491456/1795500975630_ennkzF_gyro-snake-merged.bin",
+          "firmware_name": "gyro-snake-merged.bin",
+          "firmware_size": "389456",
+          "flash_address": "0x0",
+          "muse_gadget": false,
+          "full_flash": true
+        }
+      },
+      {
+        "id": "step_2",
+        "type": "step",
+        "title": "Calibrate and steer 校准并开始",
+        "content": "Calibrate and steer 校准并开始",
+        "expanded": true,
+        "indent": 0
+      },
+      {
+        "id": "para_2",
+        "type": "paragraph",
+        "content": "Hold the board the way you want to play and tap the screen (or press the AI/OK key). Every start runs a 4-second calibration - keep still during KEEP YOUR PLAY POSE - then you get a 3-second ready window before the snake moves. Tilt the board to steer; eat apples to grow; walls and your own tail end the run.",
+        "indent": 0
+      },
+      {
+        "id": "para_2_zh",
+        "type": "paragraph",
+        "content": "按你想玩的握姿持机，点击屏幕（或按 AI/OK 键）开始。每次开局有 4 秒校准（KEEP YOUR PLAY POSE 期间保持静止），随后 3 秒准备期蛇不动，可以先预倾方向。倾斜机身控制方向；吃苹果变长；撞墙或撞到自己结束。",
+        "indent": 0
+      },
+      {
+        "id": "para_3",
+        "type": "paragraph",
+        "content": "Changed your grip mid-game? Tap the tilt ball in the bottom-right corner (or press the DOWN side key) to make the current pose the new zero point. Tap the screen or press OK to pause and resume; press UP while paused to recalibrate from scratch.",
+        "indent": 0
+      },
+      {
+        "id": "para_3_zh",
+        "type": "paragraph",
+        "content": "中途换了握姿？点击右下角倾斜球（或按 DOWN 键）把当前姿态设为新零点。点屏幕或按 OK 暂停/继续；暂停时按 UP 重新校准。",
+        "indent": 0
+      }
+    ]
+  },
+  "bom": {
+    "materials": [
+      {
+        "id": "100056818",
+        "name": "reTerminal Sticky",
+        "quantity": "1",
+        "note": "Runs the game on its e-paper; tilt the board to steer 在电子墨水屏上运行，倾斜机身控制方向",
+        "buy_url": "https://www.seeedstudio.com/reTerminal-Sticky-p-6861.html?___store=retailer"
+      }
+    ]
+  },
+  "sync": {
+    "local_revision": 1,
+    "last_pushed_revision": 1,
+    "last_pushed_at": "2026-11-24T06:17:22Z",
+    "last_pushed_hash": "sha256:a35260f093d1e4b5a33c73fe1f7218442886803127fb75a147cbe12e97792d80"
+  }
+}
