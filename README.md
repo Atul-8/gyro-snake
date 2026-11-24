@@ -153,7 +153,7 @@ python desktop/imu_debug.py --port COMx
    Mahony 姿态 → 减去零位姿态 → 轴映射到屏幕系 → **45° 扇区实时判定**；
 2. **游戏任务**：取当前扇区 + 按键/触摸事件 → 核心走一步 → 渲染 MONO 帧 →
    叠画右下角倾斜球 → 交给显示任务；
-3. **显示任务**（唯一有权碰墨水屏）：快刷约 0.85 s / 全刷约 1.4 s；标题与
+3. **显示任务**（唯一有权碰墨水屏）：全刷实测 ≈1.4 s，快刷更快；标题与
    结算卡用 4 级灰度全刷；
 4. 校准结果与最高分写入 NVS；串口命令随时改轴映射/死区/遥测率，不用重烧。
 
@@ -180,7 +180,7 @@ gyro-snake/
 │  ├─ imu_debug.py              IMU 联调页：串口双向 + 四方向自动标定
 │  ├─ imu_monitor.py  .bat      独立的实时姿态监视器（读串口遥测）
 │  └─ build.sh                  一键编译游戏 DLL（gcc）
-├─ tests/                       纯 C99 核心主机单测（701 项断言）
+├─ tests/                       纯 C99 核心主机单测（717 项断言）
 ├─ host/preview/
 │  ├─ esp_err.h                 esp_err_t 的主机替身（桌面 DLL 在 PC 上编译 tilt_ball.c 必需）
 │  └─ play_preview.c            离线帧预览：真实核心渲染一帧 + 倾斜球 → PGM（不烧录即可检查版式）
@@ -192,12 +192,12 @@ gyro-snake/
 
 | ✅ 已实现并验证 | ⚠️ 限制 / 未完成 |
 | --- | --- |
-| 四方向倾斜实时转向（±45° 扇区、边界迟滞、防抖，全部在线可调） | 电子墨水物理决定每步 ≈0.85 s（快刷），不可能 60 FPS |
+| 四方向倾斜实时转向（±45° 扇区、边界迟滞、防抖，全部在线可调） | 电子墨水每步都要等一次刷新（全刷实测 ≈1.4 s，快刷更快），不可能 60 FPS |
 | 每局 4 s 姿态校准；运行中点球 / DOWN 一键归零 | 电池供电续航未实测（USB 下电源保持正常） |
 | 触摸开始/暂停；GT911 坐标读取 + 每次点击的坐标日志 | 触摸轴向翻转未做单点标定（角落归零判定不受翻转影响） |
 | 最高分与校准结果 NVS 持久化；原创蜂鸣器音效 | 多点触控与滑动手势未实现 |
 | 串口运行时调参 + 10~50 Hz 遥测；图形化四方向标定页 | 游戏内 HUD 仅英文（C 核心自带字体）；模拟器界面支持中/EN |
-| 桌面模拟器全功能（虚拟倾斜盘 / 时序档 / 录制 GIF）；701 项主机单测 | ESP-IDF 6.1.1 验证，其他 6.x 未验证 |
+| 桌面模拟器全功能（虚拟倾斜盘 / 时序档 / 录制 GIF）；717 项主机单测 | ESP-IDF 6.1.1 验证，其他 6.x 未验证 |
 
 ## 测试状态
 
@@ -413,9 +413,9 @@ Life of a single frame on the firmware:
 2. **Game task**: takes the current sector plus key/touch events → the core
    advances one cell → renders the MONO frame → stamps the bottom-right tilt
    ball → hands the frame over;
-3. **Display task** (the only caller of the e-paper driver): fast refresh
-   ≈0.85 s / full ≈1.4 s; title and game-over cards use 4-level grayscale
-   full updates;
+3. **Display task** (the only caller of the e-paper driver): full refresh
+   measured ≈1.4 s, fast refresh faster; title and game-over cards use
+   4-level grayscale full updates;
 4. Calibration results and the high score are written to NVS; serial commands
    retune the axis map / deadzone / telemetry rate at runtime, no reflash.
 
@@ -442,7 +442,7 @@ gyro-snake/
 │  ├─ imu_debug.py              IMU tuning page: bidirectional serial + auto calibration
 │  ├─ imu_monitor.py  .bat      standalone live attitude monitor (serial telemetry)
 │  └─ build.sh                  one-shot game DLL build (gcc)
-├─ tests/                       host unit tests for the C99 cores (701 assertions)
+├─ tests/                       host unit tests for the C99 cores (717 assertions)
 ├─ host/preview/
 │  ├─ esp_err.h                 host stand-in for esp_err_t (required to build tilt_ball.c into the desktop DLL)
 │  └─ play_preview.c            offline frame preview: renders a real play frame + tilt ball to PGM, no flashing needed
@@ -454,12 +454,12 @@ gyro-snake/
 
 | ✅ Implemented and verified | ⚠️ Limitations / open items |
 | --- | --- |
-| Real-time 4-direction tilt steering (±45° sectors, boundary hysteresis, debounce — all tunable at runtime) | E-paper physics: ≈0.85 s per step (fast refresh); 60 FPS is impossible on this panel |
+| Real-time 4-direction tilt steering (±45° sectors, boundary hysteresis, debounce — all tunable at runtime) | Every snake step waits for one e-paper refresh (full measured ≈1.4 s, fast faster); 60 FPS is impossible on this panel |
 | 4-second pose calibration every run; tap-the-ball / DOWN re-zero mid-run | Battery endurance untested (power-hold verified on USB only) |
 | Touch start/pause; GT911 coordinates read + a log line per tap | Touch axis flips not yet calibrated from a known corner (the corner-zero gesture is flip-invariant) |
 | High score and calibration persisted in NVS; original buzzer SFX | Multi-touch and swipe gestures not implemented |
 | Serial runtime tuning + 10–50 Hz telemetry; graphical 4-direction calibration page | In-game HUD is English only (the C core ships its own font); the simulator UI is zh/EN |
-| Full-featured desktop simulator (tilt disc / timing profiles / GIF recording); 701 host assertions | Verified on ESP-IDF 6.1.1; other 6.x versions unverified |
+| Full-featured desktop simulator (tilt disc / timing profiles / GIF recording); 717 host assertions | Verified on ESP-IDF 6.1.1; other 6.x versions unverified |
 
 ## Test status
 
