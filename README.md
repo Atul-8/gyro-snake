@@ -17,6 +17,10 @@ simulator first.
 - [快速开始](#快速开始)
 - [怎么玩](#怎么玩)
 - [调参与联调](#调参与联调可选)
+- [架构](#架构)
+- [仓库结构](#仓库结构)
+- [已支持与限制](#已支持与限制)
+- [致谢](#致谢)
 - [English](#english)
 
 ## 功能一览
@@ -112,20 +116,85 @@ python desktop/imu_debug.py --port COMx
 倾斜四个方向各采一次样，它会对 8 种轴映射组合自动打分并给出建议——换新板子
 或改装外壳后，用它两分钟就能重新标定方向。
 
+## 架构
+
+工程刻意分成两层：**纯 C99 核心**（不碰任何硬件：无 I2C、无时钟、无 malloc）
+与**端口层**（唯一碰硬件的地方）。同一份核心被三个消费者复用，规则只需写一次：
+
+```text
+            ┌──────────────────────────────┐
+            │  desktop/play.py （Tkinter） │  桌面模拟器 GUI / 虚拟倾斜盘
+            └──────────────┬───────────────┘
+                           │ ctypes
+            ┌──────────────▼───────────────┐
+            │  desktop/build/gyro_snake.dll│  sim_api.c：C ABI 薄封装
+            └──────────────┬───────────────┘
+                           │
+        ┌──────────────────▼───────────────────┐
+        │   纯 C99 核心（三处共享，零硬件依赖）│
+        │   game_core 贪吃蛇规则+渲染+字体     │
+        │   imu_core  校准+Mahony+45° 扇区     │
+        └──────┬───────────────────┬───────────┘
+               │                   │
+   ┌───────────▼────────┐   ┌──────▼───────────────────────────┐
+   │ tests/  gcc 主机单测│   │ firmware/ （ESP-IDF, esp32s3）   │
+   └────────────────────┘   │ main/main.c   游戏主循环         │
+                            │ main/console.c 串口 $ 命令调参   │
+                            │ board_port  显示/按键/蜂鸣器/NVS │
+                            │ touch_port  GT911 触摸           │
+                            │ imu_port    LSM6DS3TR-C 100 Hz  │
+                            │ bsp         SSD1677 电子墨水    │
+                            └──────────────────────────────────┘
+```
+
+固件里一帧的生命周期：
+
+1. **IMU 任务（100 Hz）**：原始六轴数据 → 只减陀螺零偏（加速度保留重力）→
+   Mahony 姿态 → 减去零位姿态 → 轴映射到屏幕系 → **45° 扇区实时判定**；
+2. **游戏任务**：取当前扇区 + 按键/触摸事件 → 核心走一步 → 渲染 MONO 帧 →
+   叠画右下角倾斜球 → 交给显示任务；
+3. **显示任务**（唯一有权碰墨水屏）：快刷约 0.85 s / 全刷约 1.4 s；标题与
+   结算卡用 4 级灰度全刷；
+4. 校准结果与最高分写入 NVS；串口命令随时改轴映射/死区/遥测率，不用重烧。
+
 ## 仓库结构
 
 ```text
-firmware/                  ESP-IDF 固件（esp32s3）
-├─ components/game_core/   贪吃蛇核心与渲染（纯 C99，可脱离硬件复用）
-├─ components/imu_core/    校准 / Mahony 姿态 / 倾角方向（纯 C99）
-├─ components/bsp/         电子墨水与按键板级驱动（基于 Seeed 官方例程）
-├─ components/imu_port/    LSM6DS3TR-C 驱动 + 100 Hz 姿态任务
-├─ components/board_port/  显示 / 按键 / 蜂鸣器 / NVS / 串口控制台
-└─ main/                   装配与游戏主循环
-desktop/                   Windows 模拟器（Tkinter + 游戏 DLL）+ IMU 联调页
-tests/                     纯 C 核心的主机单元测试（gcc 直接编译运行）
-docs/                      需求、架构、IMU 算法分析、硬件笔记、测试记录
+gyro-snake/
+├─ firmware/                    ESP-IDF 固件（esp32s3）
+│  ├─ main/
+│  │  ├─ main.c                 装配 + 游戏主循环（校准/归零/倾斜球点击）
+│  │  └─ console.c              串口 $ 命令：运行时调参，无需重烧
+│  ├─ components/
+│  │  ├─ game_core/             贪吃蛇核心 + 渲染 + 字体（纯 C99）
+│  │  ├─ imu_core/              校准 / Mahony / 45° 扇区方向（纯 C99）
+│  │  ├─ imu_port/              LSM6DS3TR-C I2C 驱动 + 100 Hz 姿态任务
+│  │  ├─ board_port/            显示 / 按键 / 蜂鸣器 / NVS / 倾斜球绘制
+│  │  ├─ touch_port/            GT911 触摸驱动（坐标映射 + tap 日志）
+│  │  └─ bsp/                   SSD1677 墨水屏与按键底层（上游驱动，见 NOTICE）
+│  ├─ sdkconfig.defaults        esp32s3 / 240 MHz / 16 MB / 八线 PSRAM / 分区表
+│  └─ partitions.csv            3 MB 应用 + NVS + 校准存储分区
+├─ desktop/
+│  ├─ sim_api.c                 游戏 DLL 的 C ABI 边界（无 GUI）
+│  ├─ play.py  play.bat         桌面模拟器主程序（Tkinter，中/EN）
+│  ├─ imu_debug.py              IMU 联调页：串口双向 + 四方向自动标定
+│  ├─ imu_monitor.py  .bat      独立的实时姿态监视器（读串口遥测）
+│  └─ build.sh                  一键编译游戏 DLL（gcc）
+├─ tests/                       纯 C99 核心主机单测（701 项断言）
+├─ docs/                        需求 / 架构 / IMU 分析 / 硬件笔记 / 测试记录
+├─ LICENSE（MIT） NOTICE（许可明细） AGENTS.md（AI 协作工程规则）
 ```
+
+## 已支持与限制
+
+| ✅ 已实现并验证 | ⚠️ 限制 / 未完成 |
+| --- | --- |
+| 四方向倾斜实时转向（±45° 扇区、边界迟滞、防抖，全部在线可调） | 电子墨水物理决定每步 ≈0.85 s（快刷），不可能 60 FPS |
+| 每局 4 s 姿态校准；运行中点球 / DOWN 一键归零 | 电池供电续航未实测（USB 下电源保持正常） |
+| 触摸开始/暂停；GT911 坐标读取 + 每次点击的坐标日志 | 触摸轴向翻转未做单点标定（角落归零判定不受翻转影响） |
+| 最高分与校准结果 NVS 持久化；原创蜂鸣器音效 | 多点触控与滑动手势未实现 |
+| 串口运行时调参 + 10~50 Hz 遥测；图形化四方向标定页 | 游戏内 HUD 仅英文（C 核心自带字体）；模拟器界面支持中/EN |
+| 桌面模拟器全功能（虚拟倾斜盘 / 时序档 / 录制 GIF）；701 项主机单测 | ESP-IDF 6.1.1 验证，其他 6.x 未验证 |
 
 ## 测试状态
 
@@ -300,20 +369,91 @@ Tilt four ways, capture one sample run each, and it scores all 8 axis-mapping
 combinations and sends the winner back to the firmware — re-calibrating a new
 board or a new enclosure takes about two minutes.
 
+## Architecture
+
+The project is deliberately split into a **plain-C99 core** (touches no
+hardware: no I2C, no clock, no malloc) and **port layers** (the only places
+that do). The same core is reused by three consumers, so the rules are
+written exactly once:
+
+```text
+            ┌──────────────────────────────┐
+            │  desktop/play.py (Tkinter)   │  desktop GUI / virtual tilt disc
+            └──────────────┬───────────────┘
+                           │ ctypes
+            ┌──────────────▼───────────────┐
+            │  desktop/build/gyro_snake.dll│  sim_api.c: thin C ABI
+            └──────────────┬───────────────┘
+                           │
+        ┌──────────────────▼───────────────────┐
+        │  plain-C99 core (shared ×3, no HW)   │
+        │  game_core  rules + render + font    │
+        │  imu_core   calibration+Mahony+45°   │
+        └──────┬───────────────────┬───────────┘
+               │                   │
+   ┌───────────▼────────┐   ┌──────▼───────────────────────────┐
+   │ tests/  gcc unit   │   │ firmware/ (ESP-IDF, esp32s3)     │
+   └────────────────────┘   │ main/main.c   game loop          │
+                            │ main/console.c serial $ commands │
+                            │ board_port  display/keys/buzzer  │
+                            │ touch_port  GT911 touch          │
+                            │ imu_port    LSM6DS3TR-C 100 Hz  │
+                            │ bsp         SSD1677 e-paper     │
+                            └──────────────────────────────────┘
+```
+
+Life of a single frame on the firmware:
+
+1. **IMU task (100 Hz)**: raw six-axis sample → subtract gyro bias only
+   (accelerometer keeps gravity) → Mahony attitude → subtract the neutral
+   pose → axis-map into the screen frame → **real-time 45° sector decision**;
+2. **Game task**: takes the current sector plus key/touch events → the core
+   advances one cell → renders the MONO frame → stamps the bottom-right tilt
+   ball → hands the frame over;
+3. **Display task** (the only caller of the e-paper driver): fast refresh
+   ≈0.85 s / full ≈1.4 s; title and game-over cards use 4-level grayscale
+   full updates;
+4. Calibration results and the high score are written to NVS; serial commands
+   retune the axis map / deadzone / telemetry rate at runtime, no reflash.
+
 ## Repository layout
 
 ```text
-firmware/                  ESP-IDF firmware (esp32s3)
-├─ components/game_core/   Snake core and renderer (plain C99, reusable)
-├─ components/imu_core/    Calibration / Mahony attitude / tilt sectors (plain C99)
-├─ components/bsp/         E-paper and key drivers (based on Seeed examples)
-├─ components/imu_port/    LSM6DS3TR-C driver + 100 Hz attitude task
-├─ components/board_port/  Display / keys / buzzer / NVS / serial console
-└─ main/                   Wiring and the game loop
-desktop/                   Windows simulator (Tkinter + game DLL) + IMU tuning page
-tests/                     Host unit tests for the pure-C cores (plain gcc)
-docs/                      Requirements, architecture, IMU analysis, notes, test log
+gyro-snake/
+├─ firmware/                    ESP-IDF firmware (esp32s3)
+│  ├─ main/
+│  │  ├─ main.c                 wiring + game loop (calibration/re-zero/ball tap)
+│  │  └─ console.c              serial $ commands: runtime tuning, no reflash
+│  ├─ components/
+│  │  ├─ game_core/             snake core + render + font (plain C99)
+│  │  ├─ imu_core/              calibration / Mahony / 45° sectors (plain C99)
+│  │  ├─ imu_port/              LSM6DS3TR-C I2C driver + 100 Hz attitude task
+│  │  ├─ board_port/            display / keys / buzzer / NVS / tilt-ball drawing
+│  │  ├─ touch_port/            GT911 touch driver (coordinate map + tap log)
+│  │  └─ bsp/                   SSD1677 e-paper and key low level (see NOTICE)
+│  ├─ sdkconfig.defaults        esp32s3 / 240 MHz / 16 MB / octal PSRAM / partitions
+│  └─ partitions.csv            3 MB app + NVS + calibration storage
+├─ desktop/
+│  ├─ sim_api.c                 C ABI boundary of the game DLL (no GUI)
+│  ├─ play.py  play.bat         desktop simulator (Tkinter, zh/EN)
+│  ├─ imu_debug.py              IMU tuning page: bidirectional serial + auto calibration
+│  ├─ imu_monitor.py  .bat      standalone live attitude monitor (serial telemetry)
+│  └─ build.sh                  one-shot game DLL build (gcc)
+├─ tests/                       host unit tests for the C99 cores (701 assertions)
+├─ docs/                        requirements / architecture / IMU analysis / notes / test log
+├─ LICENSE (MIT) NOTICE (license details) AGENTS.md (AI-collaboration engineering rules)
 ```
+
+## Supported and limitations
+
+| ✅ Implemented and verified | ⚠️ Limitations / open items |
+| --- | --- |
+| Real-time 4-direction tilt steering (±45° sectors, boundary hysteresis, debounce — all tunable at runtime) | E-paper physics: ≈0.85 s per step (fast refresh); 60 FPS is impossible on this panel |
+| 4-second pose calibration every run; tap-the-ball / DOWN re-zero mid-run | Battery endurance untested (power-hold verified on USB only) |
+| Touch start/pause; GT911 coordinates read + a log line per tap | Touch axis flips not yet calibrated from a known corner (the corner-zero gesture is flip-invariant) |
+| High score and calibration persisted in NVS; original buzzer SFX | Multi-touch and swipe gestures not implemented |
+| Serial runtime tuning + 10–50 Hz telemetry; graphical 4-direction calibration page | In-game HUD is English only (the C core ships its own font); the simulator UI is zh/EN |
+| Full-featured desktop simulator (tilt disc / timing profiles / GIF recording); 701 host assertions | Verified on ESP-IDF 6.1.1; other 6.x versions unverified |
 
 ## Test status
 
